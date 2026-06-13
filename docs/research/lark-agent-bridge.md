@@ -33,6 +33,7 @@
 - `doctor --live`：用已配置的应用凭据做真实飞书 API 检查，包括获取租户访问令牌和查询机器人身份；传入 `--chat-id` 时额外检查目标群访问。
 - `debug listen-once --chat-id oc_xxx`：通过 `node-sdk Channel` 等待目标群里下一条提及机器人消息，输出归一化消息后退出。
 - `daemon start/status/stop`：启动、查看、停止本地守护进程；启动时从本地配置读取应用凭据，群聊由 MCP 绑定工具传入。
+- `wait --agent-session-id <id> --timeout-ms 300000`：通过本地守护进程等待指定 Agent 会话的已绑定群消息，面向 Claude Code background shell。
 - `mcp`：启动 MCP 标准输入输出服务。
 
 尚未实现：

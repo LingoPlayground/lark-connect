@@ -19,11 +19,41 @@ import { listenOnce } from "./lark/listener.js";
 import { runMcpServer } from "./mcp/server.js";
 
 const DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS = 300_000;
+const MAX_BACKGROUND_WAIT_TIMEOUT_MS = 2_147_483_647;
 
 function readOption(args, name) {
   const index = args.indexOf(name);
   if (index === -1) return undefined;
   return args[index + 1];
+}
+
+function readRequiredOptionValue(args, name) {
+  const value = readOption(args, name);
+  if (String(value ?? "").trim() === "" || String(value).startsWith("--")) {
+    throw new Error(`${name} requires a value`);
+  }
+  return String(value).trim();
+}
+
+function readIntegerOption(args, name, fallback, options = {}) {
+  const value = readOption(args, name);
+  if (value === undefined) {
+    if (hasOption(args, name)) {
+      throw new Error(`${name} requires a value`);
+    }
+    return fallback;
+  }
+  if (String(value).trim() === "" || String(value).startsWith("--")) {
+    throw new Error(`${name} requires a value`);
+  }
+
+  const parsed = Number(value);
+  const min = options.min ?? 1;
+  const max = options.max ?? Number.MAX_SAFE_INTEGER;
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}`);
+  }
+  return parsed;
 }
 
 function hasOption(args, name) {
@@ -45,6 +75,9 @@ Usage:
   curiosea-lark-connect daemon status [--daemon-port 51745]
   curiosea-lark-connect daemon stop [--daemon-port 51745]
   curiosea-lark-connect mcp
+
+Wait:
+  Requires a running daemon and the same agentSessionId used with lark_connect_bind_session.
 
 Environment:
   FEISHU_APP_ID
@@ -186,14 +219,15 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
   }
 
   if (command === "wait") {
-    const agentSessionId = String(readOption(argv, "--agent-session-id") ?? "").trim();
-    if (!agentSessionId) {
+    if (!hasOption(argv, "--agent-session-id")) {
       throw new Error("wait requires --agent-session-id");
     }
 
-    const timeoutMs = Number(
-      readOption(argv, "--timeout-ms") ?? DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS,
-    );
+    const agentSessionId = readRequiredOptionValue(argv, "--agent-session-id");
+    const timeoutMs = readIntegerOption(argv, "--timeout-ms", DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS, {
+      min: 1,
+      max: MAX_BACKGROUND_WAIT_TIMEOUT_MS,
+    });
     const config = resolveCliConfig(argv, runtime);
     const client = createDaemonClient(config, createDaemonHttpClientImpl);
     stdout.write(

@@ -94,7 +94,10 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /timeoutMs.*60000/);
     assert.match(responderSkill, /thread automation/);
     assert.match(responderSkill, /background shell/);
-    assert.match(responderSkill, /curiosea-lark-connect@latest wait/);
+    assert.match(
+      responderSkill,
+      /npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000/,
+    );
     assert.match(responderSkill, /5 分钟/);
     assert.match(responderSkill, /最多循环 10 次/);
     assert.match(responderSkill, /lark_connect_ack_message/);

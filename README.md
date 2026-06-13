@@ -35,8 +35,10 @@ node src/cli.js debug listen-once --chat-id oc_xxx
 为 Claude Code 后台 shell 等待当前会话的群消息：
 
 ```bash
-node src/cli.js wait --agent-session-id <session-id> --timeout-ms 300000
+node src/cli.js wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000
 ```
+
+这个命令要求本地守护进程已经启动，并且当前会话已经用同一个 `agentSessionId` 调用过 `lark_connect_bind_session`。
 
 在另一个终端停止守护进程：
 
@@ -69,7 +71,7 @@ node src/cli.js mcp
 等包发布后，可以切到：
 
 ```bash
-npx curiosea-lark-connect@latest mcp
+npx -y curiosea-lark-connect@latest mcp
 ```
 
 ## 插件
@@ -131,7 +133,7 @@ MCP 不会自动启动守护进程。守护进程不在线时，MCP 工具会返
 curiosea-lark-connect daemon start
 ```
 
-CLI 也提供 `curiosea-lark-connect wait --agent-session-id <id>`，用于 Claude Code background shell。这个命令复用同一个 daemon wait 队列，默认等待 5 分钟；命令结束后 Claude Code 会唤醒当前 Agent。
+CLI 也提供 `curiosea-lark-connect wait --agent-session-id <id>`，用于 Claude Code background shell。这个命令复用同一个 daemon wait 队列，默认等待 5 分钟；`<id>` 必须是绑定时使用的同一个 `agentSessionId`，命令结束后 Claude Code 会唤醒当前 Agent。
 
 ## 开发命令
 

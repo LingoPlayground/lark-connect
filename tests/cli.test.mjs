@@ -247,6 +247,50 @@ describe("cli wait", () => {
       /wait requires --agent-session-id/,
     );
   });
+
+  it("rejects option names where wait expects option values", async () => {
+    await assert.rejects(
+      () =>
+        main(["wait", "--agent-session-id", "--timeout-ms", "300000"], {
+          stdout: createStdout().stdout,
+        }),
+      /--agent-session-id requires a value/,
+    );
+
+    await assert.rejects(
+      () =>
+        main(["wait", "--agent-session-id", "session_1", "--timeout-ms"], {
+          stdout: createStdout().stdout,
+        }),
+      /--timeout-ms requires a value/,
+    );
+  });
+
+  it("rejects invalid wait timeouts before calling the daemon", async () => {
+    for (const value of ["0", "-1", "abc", "300_000", "Infinity", "2147483648"]) {
+      await assert.rejects(
+        () =>
+          main(["wait", "--agent-session-id", "session_1", "--timeout-ms", value], {
+            createDaemonHttpClientImpl: () => {
+              throw new Error("daemon client should not be created");
+            },
+            stdout: createStdout().stdout,
+          }),
+        /--timeout-ms must be an integer between 1 and 2147483647/,
+      );
+    }
+  });
+
+  it("documents background wait prerequisites in help", async () => {
+    const output = createStdout();
+
+    await main(["--help"], {
+      stdout: output.stdout,
+    });
+
+    assert.match(output.read(), /Requires a running daemon/);
+    assert.match(output.read(), /same agentSessionId used with lark_connect_bind_session/);
+  });
 });
 
 describe("cli doctor", () => {
