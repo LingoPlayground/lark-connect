@@ -1,10 +1,7 @@
 {
-  "mcp_servers": {
-    "lark-connect": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "curiosea-lark-connect@latest", "mcp"],
-      "env": {}
-    }
+  "lark-connect": {
+    "command": "npx",
+    "args": ["-y", "curiosea-lark-connect@latest", "mcp"],
+    "env": {}
   }
 }
