@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 
+import { DAEMON_ERROR_CODES } from "../src/daemon/errors.js";
 import { createDaemonHttpClient } from "../src/daemon/http-client.js";
 import { createDaemonHttpServer } from "../src/daemon/http-server.js";
 import { createDaemonRuntime } from "../src/daemon/runtime.js";
@@ -187,6 +188,8 @@ describe("daemon http server", () => {
           error?.details?.messageId === "om_reaction_fail" &&
           error?.details?.emojiType === "OK",
       );
+      const statusAfterFailure = await server.client.status();
+      assert.equal(statusAfterFailure.sessions[0].messages[0].status, "delivered");
     } finally {
       await server.close();
     }
@@ -549,6 +552,74 @@ describe("daemon http server", () => {
         filePath: "/tmp/lark-connect-downloads/screen.png",
         size: 12,
       });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid send and download requests before calling external clients", async () => {
+    const observedCalls = [];
+    const server = await createTestServer({
+      messageClient: {
+        async sendTextMessage(input) {
+          observedCalls.push(["text", input]);
+          return { ...input, messageId: "om_text" };
+        },
+        async sendFileMessage(input) {
+          observedCalls.push(["file", input]);
+          return { ...input, messageId: "om_file" };
+        },
+        async sendImageMessage(input) {
+          observedCalls.push(["image", input]);
+          return { ...input, messageId: "om_image" };
+        },
+        async sendVideoMessage(input) {
+          observedCalls.push(["video", input]);
+          return { ...input, messageId: "om_video" };
+        },
+      },
+      resourceClient: {
+        async downloadResource(input) {
+          observedCalls.push(["download", input]);
+          return { ...input, filePath: "/tmp/unused", size: 0 };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      for (const call of [
+        () => server.client.sendMessage("thread_a", { text: "   " }),
+        () => server.client.sendFile("thread_a", { filePath: "" }),
+        () => server.client.sendImage("thread_a", { imagePath: "" }),
+        () =>
+          server.client.sendVideo("thread_a", {
+            videoPath: "",
+            coverImagePath: "/tmp/cover.png",
+          }),
+        () =>
+          server.client.sendVideo("thread_a", {
+            videoPath: "/tmp/video.mp4",
+            coverImagePath: "",
+          }),
+        () =>
+          server.client.downloadResource("thread_a", {
+            messageId: "",
+            fileKey: "img_1",
+          }),
+        () =>
+          server.client.downloadResource("thread_a", {
+            messageId: "om_resource",
+            fileKey: "",
+          }),
+      ]) {
+        await assert.rejects(
+          call,
+          (error) => error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST && error?.status === 400,
+        );
+      }
+
+      assert.deepEqual(observedCalls, []);
     } finally {
       await server.close();
     }

@@ -203,8 +203,6 @@ describe("cli daemon", () => {
       [
         "daemon",
         "start",
-        "--daemon-host",
-        "127.0.0.2",
         "--daemon-port",
         "6000",
         "--daemon-idle-timeout-ms",
@@ -235,7 +233,7 @@ describe("cli daemon", () => {
     assert.equal(observedConfig.appId, "cli_test");
     assert.equal(observedConfig.appSecret, "secret");
     assert.equal(observedConfig.chatId, "");
-    assert.equal(observedConfig.daemonHost, "127.0.0.2");
+    assert.equal(observedConfig.daemonHost, "127.0.0.1");
     assert.equal(observedConfig.daemonPort, 6000);
     assert.equal(observedConfig.daemonIdleTimeoutMs, 5000);
     assert.deepEqual(JSON.parse(stdout), {

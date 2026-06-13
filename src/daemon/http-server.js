@@ -50,6 +50,10 @@ function sendJson(response, statusCode, body) {
   response.end(json);
 }
 
+function isLoopbackHost(host) {
+  return host === "127.0.0.1" || host === "localhost" || host === "::1";
+}
+
 function notFound(pathname) {
   const error = new Error(`route not found: ${pathname}`);
   error.code = DAEMON_ERROR_CODES.NOT_FOUND;
@@ -464,12 +468,13 @@ export function createDaemonHttpServer(options = {}) {
       const ackRoute = routeAck(pathname);
       if (request.method === "POST" && ackRoute) {
         const body = await readJsonBody(request);
-        const message = runtime.ackMessage(ackRoute.messageId, body);
+        const pendingMessage = runtime.getMessageForAck(ackRoute.messageId, body);
         const reaction = await addAckReaction(
           reactionClient,
-          message,
+          pendingMessage,
           ackReactionEmojiType,
         );
+        const message = runtime.ackMessage(ackRoute.messageId, body);
         sendJson(response, 200, {
           message,
           reaction,
@@ -562,6 +567,9 @@ export function createDaemonHttpServer(options = {}) {
   return {
     runtime,
     listen() {
+      if (!isLoopbackHost(host)) {
+        throw new Error("daemon host must be a loopback address");
+      }
       return new Promise((resolve, reject) => {
         server.once("error", reject);
         server.listen(port, host, () => {

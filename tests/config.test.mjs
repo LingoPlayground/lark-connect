@@ -70,7 +70,7 @@ describe("resolveConfig", () => {
 
     assert.equal(config.appId, "cli_env");
     assert.equal(config.appSecret, "env-secret");
-    assert.equal(config.chatId, "oc_env");
+    assert.equal(config.chatId, "");
   });
 
   it("uses saved app credentials below environment values and explicit values", () => {
@@ -107,27 +107,34 @@ describe("resolveConfig", () => {
     assert.equal(fromExplicit.appSecret, "explicit-secret");
   });
 
-  it("resolves daemon settings from explicit values and environment values", () => {
+  it("resolves daemon settings without accepting a configurable host", () => {
     const explicit = resolveConfig({
-      daemonHost: "127.0.0.2",
+      daemonHost: "0.0.0.0",
       daemonPort: "6000",
       daemonIdleTimeoutMs: "5000",
     });
-    assert.equal(explicit.daemonHost, "127.0.0.2");
+    assert.equal(explicit.daemonHost, "127.0.0.1");
     assert.equal(explicit.daemonPort, 6000);
     assert.equal(explicit.daemonIdleTimeoutMs, 5000);
 
     const fromEnv = resolveConfig(
       {},
       {
-        LARK_CONNECT_DAEMON_HOST: "127.0.0.3",
+        LARK_CONNECT_DAEMON_HOST: "0.0.0.0",
         LARK_CONNECT_DAEMON_PORT: "7000",
         LARK_CONNECT_DAEMON_IDLE_TIMEOUT_MS: "9000",
       },
     );
-    assert.equal(fromEnv.daemonHost, "127.0.0.3");
+    assert.equal(fromEnv.daemonHost, "127.0.0.1");
     assert.equal(fromEnv.daemonPort, 7000);
     assert.equal(fromEnv.daemonIdleTimeoutMs, 9000);
+  });
+
+  it("rejects daemon idle timeouts outside the Node timer range", () => {
+    assert.throws(
+      () => resolveConfig({ daemonIdleTimeoutMs: String(2_147_483_648) }),
+      /daemon idle timeout must be an integer between 1 and 2147483647/,
+    );
   });
 });
 

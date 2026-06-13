@@ -3,7 +3,7 @@
     "lark-connect": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "curiosea-lark-connect", "mcp"],
+      "args": ["-y", "curiosea-lark-connect@0.1.0", "mcp"],
       "env": {}
     }
   }

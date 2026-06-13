@@ -67,11 +67,56 @@ export function createDaemonRuntime(options = {}) {
   function serializeBinding(binding) {
     return {
       chatId: binding.chatId,
+      chat_id: binding.chatId,
       agentKind: binding.agentKind,
+      agent_kind: binding.agentKind,
       agentSessionId: binding.agentSessionId,
+      agent_session_id: binding.agentSessionId,
       workspace: binding.workspace,
       createdAt: binding.createdAt,
     };
+  }
+
+  function requireNonEmptyString(input, field) {
+    const value = String(input?.[field] ?? "").trim();
+    if (!value) {
+      throw new DaemonRuntimeError(
+        DAEMON_ERROR_CODES.INVALID_REQUEST,
+        `${field} is required`,
+        { field },
+      );
+    }
+    return value;
+  }
+
+  function normalizeBindingInput(input) {
+    return {
+      chatId: requireNonEmptyString(input, "chatId"),
+      agentKind: requireNonEmptyString(input, "agentKind"),
+      agentSessionId: requireNonEmptyString(input, "agentSessionId"),
+      workspace: requireNonEmptyString(input, "workspace"),
+      replace: Boolean(input?.replace),
+    };
+  }
+
+  function createMessageNotFoundError(messageId) {
+    return new DaemonRuntimeError(
+      DAEMON_ERROR_CODES.MESSAGE_NOT_FOUND,
+      `message ${messageId} was not found`,
+      { messageId },
+    );
+  }
+
+  function requireAgentSessionId(options = {}) {
+    const agentSessionId = String(options.agentSessionId ?? "").trim();
+    if (!agentSessionId) {
+      throw new DaemonRuntimeError(
+        DAEMON_ERROR_CODES.INVALID_REQUEST,
+        "agentSessionId is required",
+        { field: "agentSessionId" },
+      );
+    }
+    return agentSessionId;
   }
 
   function serializeMessage(message) {
@@ -149,29 +194,31 @@ export function createDaemonRuntime(options = {}) {
   return {
     bindSession(input) {
       touch();
+      const next = normalizeBindingInput(input);
 
-      const existing = bindingsByChatId.get(input.chatId);
-      if (existing && !input.replace) {
+      const existing = bindingsByChatId.get(next.chatId) ?? bindingsByChatId.values().next().value;
+      if (existing && !next.replace) {
         throw new DaemonRuntimeError(
           DAEMON_ERROR_CODES.BINDING_CONFLICT,
-          `chat ${input.chatId} is already bound to ${existing.agentSessionId}`,
-          { chatId: input.chatId, agentSessionId: existing.agentSessionId },
+          `chat ${existing.chatId} is already bound to ${existing.agentSessionId}`,
+          { chatId: existing.chatId, agentSessionId: existing.agentSessionId },
         );
       }
 
       if (existing) {
-        sessionsById.delete(existing.agentSessionId);
+        bindingsByChatId.clear();
+        sessionsById.clear();
       }
 
       const binding = {
-        chatId: input.chatId,
-        agentKind: input.agentKind,
-        agentSessionId: input.agentSessionId,
-        workspace: input.workspace,
+        chatId: next.chatId,
+        agentKind: next.agentKind,
+        agentSessionId: next.agentSessionId,
+        workspace: next.workspace,
         createdAt: now(),
       };
-      bindingsByChatId.set(input.chatId, binding);
-      getOrCreateSession(input.agentSessionId);
+      bindingsByChatId.set(next.chatId, binding);
+      getOrCreateSession(next.agentSessionId);
       return serializeBinding(binding);
     },
 
@@ -233,27 +280,25 @@ export function createDaemonRuntime(options = {}) {
       });
     },
 
+    getMessageForAck(messageId, options = {}) {
+      touch();
+      const agentSessionId = requireAgentSessionId(options);
+      const session = getBoundSession(agentSessionId);
+      const message = session.messages.get(messageId);
+      if (!message) throw createMessageNotFoundError(messageId);
+      return serializeMessage(message);
+    },
+
     ackMessage(messageId, options = {}) {
       touch();
+      const agentSessionId = requireAgentSessionId(options);
+      const session = getBoundSession(agentSessionId);
+      const message = session.messages.get(messageId);
+      if (!message) throw createMessageNotFoundError(messageId);
 
-      const sessions = options.agentSessionId
-        ? [getBoundSession(options.agentSessionId)]
-        : Array.from(sessionsById.values());
-      if (sessions.length === 0) throw createSessionNotBoundError();
-
-      for (const session of sessions) {
-        const message = session.messages.get(messageId);
-        if (!message) continue;
-        message.status = "acknowledged";
-        message.acknowledgedAt = now();
-        return serializeMessage(message);
-      }
-
-      throw new DaemonRuntimeError(
-        DAEMON_ERROR_CODES.MESSAGE_NOT_FOUND,
-        `message ${messageId} was not found`,
-        { messageId },
-      );
+      message.status = "acknowledged";
+      message.acknowledgedAt = now();
+      return serializeMessage(message);
     },
 
     findMessageResource(agentSessionId, messageId, fileKey) {

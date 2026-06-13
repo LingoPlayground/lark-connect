@@ -86,4 +86,21 @@ describe("mcp server", () => {
       await client.close();
     }
   });
+
+  it("returns a parse error for invalid JSON without exiting", async () => {
+    const client = createMcpClient();
+    try {
+      client.child.stdin.write("{bad json}\n");
+      const parseError = await client.nextResponse();
+      assert.equal(parseError.id, null);
+      assert.equal(parseError.error.code, -32700);
+
+      client.send({ jsonrpc: "2.0", id: 4, method: "tools/list" });
+      const tools = await client.nextResponse();
+      assert.equal(tools.id, 4);
+      assert.equal(Array.isArray(tools.result.tools), true);
+    } finally {
+      await client.close();
+    }
+  });
 });
