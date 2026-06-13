@@ -1,4 +1,4 @@
 interface:
-  display_name: "飞书连接配置"
+  display_name: "飞书连接配置（lark-connect-setup）"
   short_description: "配置飞书应用凭据并启动 lark-connect 守护进程"
   default_prompt: "帮我配置飞书连接，并检查本地守护进程是否可以启动。"
