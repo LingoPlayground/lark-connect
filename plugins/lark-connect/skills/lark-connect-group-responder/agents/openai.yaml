@@ -1,0 +1,4 @@
+interface:
+  display_name: "飞书群消息响应"
+  short_description: "把当前 Agent 会话绑定到飞书群并长时间响应提及机器人的消息"
+  default_prompt: "把当前会话绑定到飞书群，发送界面截图或录屏，然后持续响应群里提及机器人的消息。"

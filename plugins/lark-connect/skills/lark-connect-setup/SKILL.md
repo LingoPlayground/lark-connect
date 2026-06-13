@@ -1,0 +1,61 @@
+---
+name: lark-connect-setup
+description: 配置 lark-connect。当用户需要连接飞书或 Lark 机器人应用、把应用凭据保存到本地、验证机器人访问权限、启动或检查守护进程，或者排查模型上下文协议工具返回 DAEMON_NOT_RUNNING 或缺少应用凭据时使用。
+---
+
+# 飞书连接配置
+
+使用这个技能把本机准备好，之后智能体会话才能绑定到飞书群。
+
+## 流程
+
+1. 检查包命令是否可用：
+
+```bash
+curiosea-lark-connect --help
+```
+
+如果没有全局安装包，改用发布包形式：
+
+```bash
+npx -y curiosea-lark-connect --help
+```
+
+2. 如果缺少凭据，先输出配置引导：
+
+```bash
+curiosea-lark-connect setup
+```
+
+用户提供应用 ID 和应用密钥后，保存到本地配置：
+
+```bash
+curiosea-lark-connect setup --app-id cli_xxx --app-secret <secret>
+```
+
+不要在 setup 阶段要求或保存群聊 ID。群聊 ID 属于会话绑定参数。
+
+3. 凭据保存后运行真实连通性检查：
+
+```bash
+curiosea-lark-connect doctor --live
+```
+
+4. 当模型上下文协议工具返回 `DAEMON_NOT_RUNNING` 时，启动守护进程：
+
+```bash
+curiosea-lark-connect daemon start
+```
+
+然后检查状态：
+
+```bash
+curiosea-lark-connect daemon status
+```
+
+## 规则
+
+- 不要把应用密钥回显给用户。
+- 优先使用 `setup` 创建的本地配置文件；不要把密钥写入插件清单或模型上下文协议配置。
+- 守护进程在 1 小时内没有飞书事件或本地智能体调用后会自动退出。后续调用再次返回 `DAEMON_NOT_RUNNING` 时，重新启动守护进程。
+- 如果在智能体对话里执行配置，只在缺少凭据时说明用户需要打开的飞书应用后台页面。
