@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -37,6 +37,19 @@ describe("cli setup", () => {
     assert.match(stdout, /--app-id cli_xxx/);
     assert.match(stdout, /--app-secret/);
     assert.doesNotMatch(stdout, /--chat-id/);
+  });
+
+  it("runs when invoked through an npm bin symlink", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "lark-connect-bin-"));
+    const binDir = join(tempRoot, ".bin");
+    const binPath = join(binDir, "curiosea-lark-connect");
+    await mkdir(binDir);
+    await symlink(join(process.cwd(), "src", "cli.js"), binPath);
+
+    const { stdout } = await execFileAsync(binPath, ["setup"]);
+
+    assert.match(stdout, /https:\/\/open\.feishu\.cn\/app/);
+    assert.match(stdout, /--app-id cli_xxx/);
   });
 
   it("writes app credentials to local config without a chat id", async () => {
