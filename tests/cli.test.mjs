@@ -174,6 +174,81 @@ describe("cli listen", () => {
   });
 });
 
+describe("cli wait", () => {
+  it("waits for messages through the local daemon client", async () => {
+    let stdout = "";
+    let observedClientOptions;
+    let observedAgentSessionId;
+    let observedWaitOptions;
+    let exitCode;
+
+    await main(
+      [
+        "wait",
+        "--agent-session-id",
+        "session_1",
+        "--timeout-ms",
+        "300000",
+        "--daemon-port",
+        "6000",
+      ],
+      {
+        createDaemonHttpClientImpl: (options) => {
+          observedClientOptions = options;
+          return {
+            waitForMessages: async (agentSessionId, options) => {
+              observedAgentSessionId = agentSessionId;
+              observedWaitOptions = options;
+              return { messages: [{ id: "om_1" }] };
+            },
+          };
+        },
+        stdout: {
+          write(chunk) {
+            stdout += chunk;
+          },
+        },
+        exit(code) {
+          exitCode = code;
+        },
+      },
+    );
+
+    assert.deepEqual(observedClientOptions, { host: "127.0.0.1", port: 6000 });
+    assert.equal(observedAgentSessionId, "session_1");
+    assert.deepEqual(observedWaitOptions, { timeoutMs: 300000 });
+    assert.deepEqual(JSON.parse(stdout), { messages: [{ id: "om_1" }] });
+    assert.equal(exitCode, 0);
+  });
+
+  it("uses a five minute default timeout for background waits", async () => {
+    let observedWaitOptions;
+
+    await main(["wait", "--agent-session-id", "session_1"], {
+      createDaemonHttpClientImpl: () => ({
+        waitForMessages: async (_agentSessionId, options) => {
+          observedWaitOptions = options;
+          return { messages: [] };
+        },
+      }),
+      stdout: createStdout().stdout,
+      exit() {},
+    });
+
+    assert.deepEqual(observedWaitOptions, { timeoutMs: 300000 });
+  });
+
+  it("requires an agent session id before waiting", async () => {
+    await assert.rejects(
+      () =>
+        main(["wait"], {
+          stdout: createStdout().stdout,
+        }),
+      /wait requires --agent-session-id/,
+    );
+  });
+});
+
 describe("cli doctor", () => {
   it("uses saved app credentials for live checks", async () => {
     const configFile = await createConfigFilePath();

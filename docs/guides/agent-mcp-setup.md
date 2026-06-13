@@ -79,6 +79,12 @@ Claude Code 第一次看到项目级 MCP 服务时，可能会显示等待批准
 
 只有真实 @ 机器人的目标群消息会进入队列。普通群消息、或者只是在文本里写机器人名字的消息，不会触发 agent。
 
+Claude Code 需要长时间等待时，可以把下面的命令放到 background shell。它复用守护进程的 wait 逻辑，默认建议等待 5 分钟；shell 结束后 Claude Code 会唤醒当前 Agent，再根据输出继续处理消息或进入下一轮等待。
+
+```bash
+npx -y curiosea-lark-connect@latest wait --agent-session-id <session-id> --timeout-ms 300000
+```
+
 如果 `ack` 返回 `LARK_REACTION_FAILED`，通常是飞书应用还没有开通 `im:message` 或 `im:message.reactions:write_only` 权限，或者机器人不在原消息所在会话内。
 
 视频发送要求提供封面图，是因为真实群验证里无封面视频虽然能拿到消息 ID，但读取消息详情时飞书会返回服务端错误。当前工具只暴露稳定路径。

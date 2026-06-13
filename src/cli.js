@@ -18,6 +18,8 @@ import { runLiveDoctor } from "./lark/doctor.js";
 import { listenOnce } from "./lark/listener.js";
 import { runMcpServer } from "./mcp/server.js";
 
+const DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS = 300_000;
+
 function readOption(args, name) {
   const index = args.indexOf(name);
   if (index === -1) return undefined;
@@ -38,6 +40,7 @@ Usage:
   curiosea-lark-connect config clear
   curiosea-lark-connect doctor [--live] [--app-id cli_xxx] [--chat-id oc_xxx]
   curiosea-lark-connect debug listen-once [--timeout-ms 120000] --chat-id oc_xxx
+  curiosea-lark-connect wait --agent-session-id <id> [--timeout-ms 300000] [--daemon-port 51745]
   curiosea-lark-connect daemon start [--daemon-port 51745]
   curiosea-lark-connect daemon status [--daemon-port 51745]
   curiosea-lark-connect daemon stop [--daemon-port 51745]
@@ -178,6 +181,24 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
     const config = resolveCliConfig(argv, runtime);
     const message = await listenOnceImpl(config, { timeoutMs });
     stdout.write(`${JSON.stringify(message, null, 2)}\n`);
+    exit(0);
+    return;
+  }
+
+  if (command === "wait") {
+    const agentSessionId = String(readOption(argv, "--agent-session-id") ?? "").trim();
+    if (!agentSessionId) {
+      throw new Error("wait requires --agent-session-id");
+    }
+
+    const timeoutMs = Number(
+      readOption(argv, "--timeout-ms") ?? DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS,
+    );
+    const config = resolveCliConfig(argv, runtime);
+    const client = createDaemonClient(config, createDaemonHttpClientImpl);
+    stdout.write(
+      `${JSON.stringify(await client.waitForMessages(agentSessionId, { timeoutMs }), null, 2)}\n`,
+    );
     exit(0);
     return;
   }

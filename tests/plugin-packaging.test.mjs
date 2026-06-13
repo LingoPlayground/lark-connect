@@ -93,7 +93,8 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /lark_connect_wait_messages/);
     assert.match(responderSkill, /timeoutMs.*60000/);
     assert.match(responderSkill, /thread automation/);
-    assert.match(responderSkill, /loop monitor/);
+    assert.match(responderSkill, /background shell/);
+    assert.match(responderSkill, /curiosea-lark-connect@latest wait/);
     assert.match(responderSkill, /5 分钟/);
     assert.match(responderSkill, /最多循环 10 次/);
     assert.match(responderSkill, /lark_connect_ack_message/);

@@ -32,6 +32,12 @@ node src/cli.js daemon start
 node src/cli.js debug listen-once --chat-id oc_xxx
 ```
 
+为 Claude Code 后台 shell 等待当前会话的群消息：
+
+```bash
+node src/cli.js wait --agent-session-id <session-id> --timeout-ms 300000
+```
+
 在另一个终端停止守护进程：
 
 ```bash
@@ -124,6 +130,8 @@ MCP 不会自动启动守护进程。守护进程不在线时，MCP 工具会返
 ```bash
 curiosea-lark-connect daemon start
 ```
+
+CLI 也提供 `curiosea-lark-connect wait --agent-session-id <id>`，用于 Claude Code background shell。这个命令复用同一个 daemon wait 队列，默认等待 5 分钟；命令结束后 Claude Code 会唤醒当前 Agent。
 
 ## 开发命令
 
