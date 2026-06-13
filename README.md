@@ -48,30 +48,30 @@ node src/cli.js daemon stop
 
 ## Agent 配置
 
-本仓库已经包含 Codex 和 Claude Code 的项目级 MCP 配置。
+本仓库不再提交 Codex 或 Claude Code 的项目级 MCP 配置。日常使用应通过插件安装来获得 MCP 服务注册。
 
-Codex 读取：
-
-```text
-.codex/config.toml
-```
-
-Claude Code 读取：
+Codex 插件读取：
 
 ```text
-.mcp.json
+plugins/lark-connect/codex.mcp.json
 ```
 
-两份配置当前都指向仓库源码：
+Claude Code 插件读取：
 
-```bash
-node src/cli.js mcp
+```text
+plugins/lark-connect/.mcp.json
 ```
 
-等包发布后，可以切到：
+插件里的配置默认通过发布包启动服务：
 
 ```bash
 npx -y curiosea-lark-connect@latest mcp
+```
+
+如果要在本仓库调试源码，可以临时在本机的用户级或会话级配置里指向：
+
+```bash
+node src/cli.js mcp
 ```
 
 ## 插件

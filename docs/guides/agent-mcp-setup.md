@@ -1,24 +1,18 @@
 # Agent MCP 配置
 
-这份文档说明如何在当前仓库里让 Codex 和 Claude Code 连接 `curiosea-lark-connect` 的 MCP（Model Context Protocol，模型上下文协议）服务。
+这份文档说明如何通过 `lark-connect` 插件让 Codex 和 Claude Code 连接 `curiosea-lark-connect` 的 MCP（Model Context Protocol，模型上下文协议）服务。
 
 ## Codex
 
-Codex 的项目级配置文件是：
+Codex 通过插件内的 MCP 描述文件注册服务：
 
 ```text
-.codex/config.toml
+plugins/lark-connect/codex.mcp.json
 ```
 
-当前注册内容：
+仓库根目录不再保留 `.codex/config.toml` 这种项目级 MCP 配置。插件安装后，Codex 会从插件配置读取 `npx -y curiosea-lark-connect@latest mcp` 入口。
 
-```toml
-[mcp_servers.lark-connect]
-command = "node"
-args = ["src/cli.js", "mcp"]
-```
-
-在仓库根目录验证：
+验证：
 
 ```bash
 codex mcp list
@@ -28,41 +22,28 @@ codex mcp list
 
 ## Claude Code
 
-Claude Code 的项目级配置文件是：
+Claude Code 通过插件内的 MCP 描述文件注册服务：
 
 ```text
-.mcp.json
+plugins/lark-connect/.mcp.json
 ```
 
-当前注册内容：
+仓库根目录不再保留 `.mcp.json` 这种项目级 MCP 配置。插件安装后，Claude Code 会从插件配置读取 `npx -y curiosea-lark-connect@latest mcp` 入口。
 
-```json
-{
-  "mcpServers": {
-    "lark-connect": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["src/cli.js", "mcp"],
-      "env": {}
-    }
-  }
-}
-```
-
-在仓库根目录验证：
+验证：
 
 ```bash
 claude mcp list
 ```
 
-Claude Code 第一次看到项目级 MCP 服务时，可能会显示等待批准。进入 Claude Code 交互会话后批准这个项目级服务，再依赖它处理飞书消息。
+Claude Code 第一次看到插件 MCP 服务时，可能会显示等待批准。进入 Claude Code 交互会话后批准这个服务，再依赖它处理飞书消息。
 
 ## 运行流程
 
 1. 先执行 `curiosea-lark-connect setup --app-id cli_xxx --app-secret <secret>` 保存飞书应用凭据。这个步骤不配置群聊。
 2. 执行 `curiosea-lark-connect doctor --live` 检查应用凭据和机器人身份。
 3. 执行 `curiosea-lark-connect daemon start` 启动守护进程。
-4. 在当前仓库里启动 Codex 或 Claude Code。
+4. 在已安装插件的 Codex 或 Claude Code 里启动当前仓库会话。
 5. 调用 `lark_connect_bind_session`，传入：
    - `chatId`：飞书群 `chat_id`
    - `agentKind`：`codex` 或 `claude-code`

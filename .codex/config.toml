@@ -1,3 +1,0 @@
-[mcp_servers.lark-connect]
-command = "node"
-args = ["src/cli.js", "mcp"]

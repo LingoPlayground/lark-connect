@@ -60,6 +60,8 @@ describe("dual runtime plugin packaging", () => {
   });
 
   it("ships MCP configs in the format expected by each runtime", () => {
+    assert.equal(existsSync(join(repoRoot, ".mcp.json")), false);
+    assert.equal(existsSync(join(repoRoot, ".codex", "config.toml")), false);
     assert.equal(existsSync(join(pluginRoot, "codex.mcp.json")), true);
     assert.equal(existsSync(join(pluginRoot, ".mcp.json")), true);
 
