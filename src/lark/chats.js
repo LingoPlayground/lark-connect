@@ -1,27 +1,20 @@
-import { createDefaultLarkChannel, requireLarkAppConfig } from "./listener.js";
+import { createDefaultLarkChannel, requireLarkAppConfig } from "./channel.js";
 
 const DEFAULT_CHAT_SEARCH_PAGE_SIZE = 20;
-const MAX_CHAT_SEARCH_PAGE_SIZE = 100;
+export const MAX_CHAT_SEARCH_PAGE_SIZE = 100;
+const DEFAULT_CHAT_SEARCH_TIMEOUT_MS = 30_000;
 
 function normalizeQuery(value) {
   const query = String(value ?? "").trim();
-  if (!query) throw createInvalidRequestError("query is required");
+  if (!query) throw new Error("query is required");
   return query;
-}
-
-function createInvalidRequestError(message) {
-  const error = new Error(message);
-  error.code = "INVALID_REQUEST";
-  return error;
 }
 
 function normalizePageSize(value) {
   if (value === undefined) return DEFAULT_CHAT_SEARCH_PAGE_SIZE;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_CHAT_SEARCH_PAGE_SIZE) {
-    throw createInvalidRequestError(
-      `pageSize must be an integer between 1 and ${MAX_CHAT_SEARCH_PAGE_SIZE}`,
-    );
+    throw new Error(`pageSize must be an integer between 1 and ${MAX_CHAT_SEARCH_PAGE_SIZE}`);
   }
   return parsed;
 }
@@ -40,9 +33,24 @@ function normalizeChatItem(item = {}) {
     avatar: normalizeOptionalString(item.avatar),
     chatMode: normalizeOptionalString(item.chat_mode ?? item.chatMode),
     chatType: normalizeOptionalString(item.chat_type ?? item.chatType),
+    chatStatus: normalizeOptionalString(item.chat_status ?? item.chatStatus),
     memberCount: item.member_count ?? item.memberCount,
     ownerId: normalizeOptionalString(item.owner_id ?? item.ownerId),
   };
+}
+
+async function withTimeout(promise, timeoutMs, message) {
+  let timeout;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 function emptySearchNextSteps(query) {
@@ -58,6 +66,7 @@ export async function createLarkChatClient(config, options = {}) {
 
   const channelFactory = options.channelFactory ?? createDefaultLarkChannel;
   const channel = await channelFactory(config);
+  const searchTimeoutMs = options.searchTimeoutMs ?? DEFAULT_CHAT_SEARCH_TIMEOUT_MS;
 
   return {
     async searchChats(input = {}) {
@@ -75,7 +84,11 @@ export async function createLarkChatClient(config, options = {}) {
       };
       if (pageToken) params.page_token = pageToken;
 
-      const result = await channel.rawClient.im.v1.chat.search({ params });
+      const result = await withTimeout(
+        channel.rawClient.im.v1.chat.search({ params }),
+        searchTimeoutMs,
+        `Feishu chat search timed out after ${searchTimeoutMs}ms`,
+      );
       const data = result?.data ?? {};
       const items = (data.items ?? []).map(normalizeChatItem).filter((item) => item.chatId);
 

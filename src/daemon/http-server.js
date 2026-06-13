@@ -1,11 +1,10 @@
 import { createServer } from "node:http";
 
 import { DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT } from "../config.js";
+import { MAX_CHAT_SEARCH_PAGE_SIZE } from "../lark/chats.js";
 import { DEFAULT_ACK_REACTION_EMOJI_TYPE } from "../lark/reactions.js";
 import { createDaemonRuntime } from "./runtime.js";
 import { DAEMON_ERROR_CODES, DaemonRuntimeError } from "./errors.js";
-
-const MAX_CHAT_SEARCH_PAGE_SIZE = 100;
 
 function statusForError(error) {
   if (error instanceof DaemonRuntimeError) {
@@ -202,6 +201,34 @@ function requireString(value, fieldName) {
   return text;
 }
 
+function requireObjectBody(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    const error = new Error("request body must be a JSON object");
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+  return body;
+}
+
+function requireStringField(value, fieldName) {
+  if (typeof value !== "string") {
+    const error = new Error(`${fieldName} must be a string`);
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+  return requireString(value, fieldName);
+}
+
+function normalizeOptionalStringField(value, fieldName) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") {
+    const error = new Error(`${fieldName} must be a string`);
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+  return value.trim() || undefined;
+}
+
 function normalizeOptionalChatSearchPageSize(value) {
   if (value === undefined) return undefined;
 
@@ -326,19 +353,24 @@ async function sendTextMessage(messageClient, agentSessionId, chatId, body) {
 }
 
 async function searchChats(chatClient, body) {
+  const input = requireObjectBody(body);
+  const query = requireStringField(input.query, "query");
+  const pageSize = normalizeOptionalChatSearchPageSize(input.pageSize);
+  const pageToken = normalizeOptionalStringField(input.pageToken, "pageToken");
+
   if (!chatClient?.searchChats) {
-    throw createChatSearchError(new Error("chat search client is unavailable"), body.query);
+    throw createChatSearchError(new Error("chat search client is unavailable"), query);
   }
 
   try {
     return await chatClient.searchChats({
-      query: requireString(body.query, "query"),
-      pageSize: normalizeOptionalChatSearchPageSize(body.pageSize),
-      pageToken: body.pageToken,
+      query,
+      pageSize,
+      pageToken,
     });
   } catch (cause) {
     if (cause?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) throw cause;
-    throw createChatSearchError(cause, body.query);
+    throw createChatSearchError(cause, query);
   }
 }
 

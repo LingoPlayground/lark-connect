@@ -126,6 +126,63 @@ describe("mcp daemon tools", () => {
     });
   });
 
+  it("returns empty chat search next steps through the tool result", async () => {
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_search_chats", {
+        query: "不存在的群",
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          searchChats: async (args) => ({
+            query: args.query,
+            items: [],
+            hasMore: false,
+            pageToken: "",
+            nextSteps: [
+              "没有找到名称匹配“不存在的群”且机器人可见的群聊。",
+              "请用户确认群名是否正确；如果目标群还不存在，请先创建群。",
+              "如果群已经存在，请把当前飞书应用的机器人拉入群后再搜索。",
+            ],
+          }),
+        }),
+      },
+    );
+
+    const result = parseToolJson(response);
+    assert.deepEqual(result.items, []);
+    assert.match(result.nextSteps.join("\n"), /创建群/);
+    assert.match(result.nextSteps.join("\n"), /机器人拉入群/);
+  });
+
+  it("returns chat search failures as structured tool errors", async () => {
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_search_chats", {
+        query: "测试群",
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          searchChats: async () => {
+            throw new DaemonHttpError(
+              DAEMON_ERROR_CODES.LARK_CHAT_SEARCH_FAILED,
+              "failed to search Feishu chats for 测试群: permission denied",
+              {
+                status: 502,
+                details: { query: "测试群" },
+              },
+            );
+          },
+        }),
+      },
+    );
+
+    assert.equal(response.result.isError, true);
+    assert.deepEqual(parseToolJson(response), {
+      code: DAEMON_ERROR_CODES.LARK_CHAT_SEARCH_FAILED,
+      message: "failed to search Feishu chats for 测试群: permission denied",
+      details: { query: "测试群" },
+    });
+  });
+
   it("returns daemon-not-running as a tool error with a start command", async () => {
     const response = await handleMcpMessage(toolCall("lark_connect_daemon_status"), {
       createDaemonHttpClientImpl: () => ({

@@ -1,7 +1,4 @@
-export function requireLarkAppConfig(config, featureName = "listen") {
-  if (!config.appId) throw new Error(`FEISHU_APP_ID is required for ${featureName}`);
-  if (!config.appSecret) throw new Error(`FEISHU_APP_SECRET is required for ${featureName}`);
-}
+import { createDefaultLarkChannel, requireLarkAppConfig } from "./channel.js";
 
 export function requireListenerConfig(config) {
   requireLarkAppConfig(config);
@@ -26,23 +23,6 @@ export function normalizeMessage(message) {
     replyToMessageId: message.replyToMessageId,
     createTime: message.createTime,
   };
-}
-
-export async function createDefaultLarkChannel(config, options = {}) {
-  const lark = await import("@larksuiteoapi/node-sdk");
-  const policy = {
-    requireMention: true,
-    dmMode: "open",
-  };
-  if (options.groupAllowlist?.length) policy.groupAllowlist = options.groupAllowlist;
-
-  return lark.createLarkChannel({
-    appId: config.appId,
-    appSecret: config.appSecret,
-    loggerLevel: lark.LoggerLevel.warn,
-    policy,
-    includeRawInMessage: true,
-  });
 }
 
 export async function listenOnce(config, options = {}) {
@@ -75,7 +55,7 @@ export async function listenOnce(config, options = {}) {
     };
 
     timeout = setTimeout(() => {
-      settle(reject, new Error(`Timed out waiting for a Lark mention after ${timeoutMs}ms`));
+      settle(reject, new Error(`Timed out waiting for a Lark message after ${timeoutMs}ms`));
     }, timeoutMs);
 
     unsubscribe = channel.on("message", (message) => {

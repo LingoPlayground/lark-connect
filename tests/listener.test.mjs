@@ -202,7 +202,7 @@ describe("listenOnce", () => {
             channelFactory: () => channel,
           },
         ),
-      /Timed out waiting for a Lark mention/,
+      /Timed out waiting for a Lark message/,
     );
     assert.equal(channel.disconnected, true);
   });

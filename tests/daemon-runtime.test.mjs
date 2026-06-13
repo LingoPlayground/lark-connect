@@ -242,6 +242,26 @@ describe("daemon runtime messages", () => {
     );
   });
 
+  it("does not mark unrouted messages as duplicates before a chat is bound", () => {
+    const { runtime } = createTestRuntime();
+    runtime.bindSession(binding());
+
+    assert.deepEqual(
+      runtime.receiveLarkMessage(larkMessage({ messageId: "om_late", chatId: "oc_late" })),
+      { accepted: false, reason: "unrouted" },
+    );
+
+    runtime.bindSession(binding({ chatId: "oc_late", agentSessionId: "thread_b", replace: true }));
+    assert.equal(
+      runtime.receiveLarkMessage(larkMessage({ messageId: "om_late", chatId: "oc_late" })).accepted,
+      true,
+    );
+    assert.deepEqual(
+      runtime.pollMessages("thread_b").map((message) => message.larkMessageId),
+      ["om_late"],
+    );
+  });
+
   it("returns an empty result when immediate polling has no messages", () => {
     const { runtime } = createTestRuntime();
     runtime.bindSession(binding());

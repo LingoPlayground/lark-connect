@@ -1,4 +1,4 @@
-import { createDefaultLarkChannel } from "./listener.js";
+import { createDefaultLarkChannel } from "./channel.js";
 
 export const DEFAULT_ACK_REACTION_EMOJI_TYPE = "OK";
 

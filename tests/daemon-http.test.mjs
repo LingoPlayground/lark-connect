@@ -32,6 +32,7 @@ async function createTestServer(options = {}) {
   return {
     runtime,
     client,
+    address,
     async close() {
       await daemon.close();
     },
@@ -117,6 +118,35 @@ describe("daemon http server", () => {
     }
   });
 
+  it("returns empty search guidance through the local protocol", async () => {
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats(input) {
+          return {
+            query: input.query,
+            items: [],
+            hasMore: false,
+            pageToken: "",
+            nextSteps: [
+              "没有找到名称匹配“测试群”且机器人可见的群聊。",
+              "请用户确认群名是否正确；如果目标群还不存在，请先创建群。",
+              "如果群已经存在，请把当前飞书应用的机器人拉入群后再搜索。",
+            ],
+          };
+        },
+      },
+    });
+    try {
+      const result = await server.client.searchChats({ query: "测试群" });
+
+      assert.deepEqual(result.items, []);
+      assert.match(result.nextSteps.join("\n"), /创建群/);
+      assert.match(result.nextSteps.join("\n"), /机器人拉入群/);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("reports chat search failures", async () => {
     const server = await createTestServer({
       chatClient: {
@@ -154,6 +184,54 @@ describe("daemon http server", () => {
           error?.status === 400 &&
           /pageSize/.test(error.message),
       );
+      await assert.rejects(
+        () => server.client.searchChats({ query: "   " }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /query/.test(error.message),
+      );
+      await assert.rejects(
+        () => server.client.searchChats({ query: ["测试群"] }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /query/.test(error.message),
+      );
+      await assert.rejects(
+        () => server.client.searchChats({ query: "测试群", pageToken: { bad: true } }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /pageToken/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects a null chat search request body as an invalid request", async () => {
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats() {
+          throw new Error("should not call search client");
+        },
+      },
+    });
+    try {
+      const response = await fetch(
+        `http://${server.address.host}:${server.address.port}/chats/search`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "null",
+        },
+      );
+      const payload = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.equal(payload.error.code, DAEMON_ERROR_CODES.INVALID_REQUEST);
+      assert.match(payload.error.message, /body/);
     } finally {
       await server.close();
     }

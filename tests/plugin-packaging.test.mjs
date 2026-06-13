@@ -52,6 +52,7 @@ describe("dual runtime plugin packaging", () => {
   it("registers the plugin in Codex and Claude marketplaces", () => {
     const codexMarketplace = readJson(".agents/plugins/marketplace.json");
     const codexEntry = codexMarketplace.plugins.find((entry) => entry.name === "lark-connect");
+    assert.equal(codexEntry.version, "0.1.3");
     assert.equal(codexEntry.source.path, "./plugins/lark-connect");
     assert.equal(codexEntry.policy.installation, "AVAILABLE");
     assert.equal(codexEntry.policy.authentication, "ON_INSTALL");
@@ -60,6 +61,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(claudeMarketplace.description, /飞书/);
     assert.match(claudeMarketplace.description, /搜索/);
     const claudeEntry = claudeMarketplace.plugins.find((entry) => entry.name === "lark-connect");
+    assert.equal(claudeEntry.version, "0.1.3");
     assert.match(claudeEntry.description, /飞书/);
     assert.match(claudeEntry.description, /搜索群聊/);
     assert.equal(claudeEntry.source, "./plugins/lark-connect");
@@ -91,7 +93,8 @@ describe("dual runtime plugin packaging", () => {
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest setup/);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest doctor --live/);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest daemon start/);
-    assert.match(setupSkill, /机器人.*加入目标群/);
+    assert.match(setupSkill, /目标是群聊/);
+    assert.match(setupSkill, /单聊.*chatId/);
 
     assert.equal(
       existsSync(join(pluginRoot, "skills", "lark-connect-group-responder")),

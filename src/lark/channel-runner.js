@@ -1,8 +1,5 @@
-import {
-  createDefaultLarkChannel,
-  normalizeMessage,
-  requireLarkAppConfig,
-} from "./listener.js";
+import { createDefaultLarkChannel, requireLarkAppConfig } from "./channel.js";
+import { normalizeMessage } from "./listener.js";
 
 export function createLarkChannelRunner(config, options = {}) {
   requireLarkAppConfig(config, "daemon");

@@ -107,8 +107,8 @@ npx -y curiosea-lark-connect@latest daemon stop
 | `lark_connect_daemon_status` | 查看守护进程状态。 |
 | `lark_connect_search_chats` | 搜索机器人可见的飞书群聊，返回候选 `chatId`。 |
 | `lark_connect_bind_session` | 把一个飞书聊天绑定到当前 Codex thread 或 Claude Code session。 |
-| `lark_connect_poll_messages` | 立即领取待处理的提及消息。 |
-| `lark_connect_wait_messages` | 限时等待提及消息。 |
+| `lark_connect_poll_messages` | 立即领取当前绑定聊天的待处理消息。 |
+| `lark_connect_wait_messages` | 限时等待当前绑定聊天的待处理消息。 |
 | `lark_connect_ack_message` | 确认一条消息已经处理完成，并给原始飞书消息添加 `OK` reaction（反应）。 |
 | `lark_connect_send_message` | 向当前绑定聊天发送文本，可选回复某条原消息。 |
 | `lark_connect_send_image` | 向当前绑定聊天发送本地图片。 |
@@ -172,7 +172,7 @@ flowchart LR
 - 应用 ID 和应用密钥保存在本机配置文件，文件权限设为 `0600`。
 - `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` 仍可作为运行时覆盖，但正式安装优先使用 `setup` 写入的本地配置。
 - `LARK_CONNECT_DAEMON_PORT` 可以覆盖本地守护进程端口，默认是 `51745`。
-- 绑定、消息队列、搜索结果和去重状态都只在守护进程内存里保存，进程重启后丢失。
+- 绑定、消息队列和去重状态都只在守护进程内存里保存，进程重启后丢失；搜索结果只随单次请求返回。
 - 当前不持久化 `thread_id` 或 `root_id`，它们只作为飞书消息元数据保留。
 
 ### 插件载荷

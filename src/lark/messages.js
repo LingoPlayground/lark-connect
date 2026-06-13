@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { basename } from "node:path";
 
-import { createDefaultLarkChannel } from "./listener.js";
+import { createDefaultLarkChannel } from "./channel.js";
 
 function requireMessageConfig(config) {
   if (!config.appId) throw new Error("FEISHU_APP_ID is required for messages");

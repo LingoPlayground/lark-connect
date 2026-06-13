@@ -225,17 +225,17 @@ export function createDaemonRuntime(options = {}) {
     receiveLarkMessage(payload) {
       touch();
 
-      const larkMessageId = payload.messageId;
-      if (larkMessageId && seenLarkMessageIds.has(larkMessageId)) {
-        return { accepted: false, reason: "duplicate" };
-      }
-      if (larkMessageId) seenLarkMessageIds.add(larkMessageId);
-
       const binding = bindingsByChatId.get(payload.chatId);
       const directMessage = payload.chatType === "p2p";
       if (!binding || (!directMessage && !payload.mentionedBot)) {
         return { accepted: false, reason: "unrouted" };
       }
+
+      const larkMessageId = payload.messageId;
+      if (larkMessageId && seenLarkMessageIds.has(larkMessageId)) {
+        return { accepted: false, reason: "duplicate" };
+      }
+      if (larkMessageId) seenLarkMessageIds.add(larkMessageId);
 
       const session = getOrCreateSession(binding.agentSessionId);
       const id = larkMessageId ?? `message_${++generatedMessageCount}`;

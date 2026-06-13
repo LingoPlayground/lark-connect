@@ -29,6 +29,7 @@ describe("lark chats", () => {
                             avatar: "https://example.com/avatar.png",
                             chat_mode: "group",
                             chat_type: "private",
+                            chat_status: "normal",
                             member_count: 3,
                             owner_id: "ou_owner",
                           },
@@ -66,6 +67,7 @@ describe("lark chats", () => {
           avatar: "https://example.com/avatar.png",
           chatMode: "group",
           chatType: "private",
+          chatStatus: "normal",
           memberCount: 3,
           ownerId: "ou_owner",
         },
@@ -74,6 +76,56 @@ describe("lark chats", () => {
       pageToken: "",
       nextSteps: [],
     });
+  });
+
+  it("passes and returns pagination tokens", async () => {
+    const observedCalls = [];
+    const client = await createLarkChatClient(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+      },
+      {
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {
+                chat: {
+                  async search(payload) {
+                    observedCalls.push(payload);
+                    return {
+                      data: {
+                        items: [{ chat_id: "oc_next", name: "下一页群" }],
+                        has_more: true,
+                        next_page_token: "next-token",
+                      },
+                    };
+                  },
+                },
+              },
+            },
+          },
+        }),
+      },
+    );
+
+    const result = await client.searchChats({
+      query: "测试群",
+      pageSize: 2,
+      pageToken: "current-token",
+    });
+
+    assert.deepEqual(observedCalls, [
+      {
+        params: {
+          query: "测试群",
+          page_size: 2,
+          page_token: "current-token",
+        },
+      },
+    ]);
+    assert.equal(result.hasMore, true);
+    assert.equal(result.pageToken, "next-token");
   });
 
   it("returns setup guidance when no visible chats match", async () => {
@@ -111,7 +163,7 @@ describe("lark chats", () => {
     assert.match(result.nextSteps.join("\n"), /机器人拉入群/);
   });
 
-  it("marks invalid search requests as invalid requests", async () => {
+  it("rejects invalid page sizes before calling Feishu", async () => {
     const client = await createLarkChatClient(
       {
         appId: "cli_test",
@@ -136,7 +188,37 @@ describe("lark chats", () => {
 
     await assert.rejects(
       () => client.searchChats({ query: "测试群", pageSize: 0 }),
-      (error) => error?.code === "INVALID_REQUEST" && /pageSize/.test(error.message),
+      /pageSize/,
+    );
+  });
+
+  it("times out chat search calls", async () => {
+    const client = await createLarkChatClient(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+      },
+      {
+        searchTimeoutMs: 1,
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {
+                chat: {
+                  async search() {
+                    return new Promise(() => {});
+                  },
+                },
+              },
+            },
+          },
+        }),
+      },
+    );
+
+    await assert.rejects(
+      () => client.searchChats({ query: "测试群" }),
+      /timed out after 1ms/,
     );
   });
 });
