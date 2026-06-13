@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "curiosea-lark-connect": "./src/cli.js"
+    "curiosea-lark-connect": "src/cli.js"
   },
   "files": [
     "src",

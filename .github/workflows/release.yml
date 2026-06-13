@@ -1,0 +1,88 @@
+name: Release
+
+# Canonical release path: bump package.json in a PR, merge to main,
+# then push tag v<package.version>. Manual dispatch is for workflow
+# dry-run validation and will not publish unless invoked on a tag ref
+# with dry_run=false.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and test, but skip npm publish'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match package.json version '$PKG_VERSION'. Bump package.json or push the correct tag."
+            exit 1
+          fi
+          echo "Tag and package.json version agree: $PKG_VERSION"
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack dry run
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        if: |
+          startsWith(github.ref, 'refs/tags/v') && (
+            github.event_name == 'push' ||
+            (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+          )
+        run: npm publish --access public --provenance
+
+      - name: Create GitHub Release
+        if: |
+          startsWith(github.ref, 'refs/tags/v') && (
+            github.event_name == 'push' ||
+            (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+          )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag \
+            $PRERELEASE_FLAG
