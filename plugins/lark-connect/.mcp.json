@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "lark-connect": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "curiosea-lark-connect", "mcp"],
+      "env": {}
+    }
+  }
+}

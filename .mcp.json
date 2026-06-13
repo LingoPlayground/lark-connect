@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "lark-connect": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["src/cli.js", "mcp"],
+      "env": {}
+    }
+  }
+}
