@@ -77,7 +77,7 @@ describe("dual runtime plugin packaging", () => {
     const setupSkill = readText("plugins/lark-connect/skills/lark-connect-setup/SKILL.md");
     const setupOpenai = readText("plugins/lark-connect/skills/lark-connect-setup/agents/openai.yaml");
     assert.match(setupSkill, /^name: lark-connect-setup$/m);
-    assert.match(setupOpenai, /display_name: "飞书连接配置（lark-connect-setup）"/);
+    assert.match(setupOpenai, /display_name: "lark-connect-setup"/);
     assert.match(setupSkill, /^# 飞书连接配置$/m);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest setup/);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest doctor --live/);
@@ -93,7 +93,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /^name: lark-connect-group-responder$/m);
     assert.match(
       responderOpenai,
-      /display_name: "飞书群消息响应（lark-connect-group-responder）"/,
+      /display_name: "lark-connect-group-responder"/,
     );
     assert.match(responderSkill, /^# 飞书群消息响应$/m);
     assert.doesNotMatch(responderSkill, /验收/);
