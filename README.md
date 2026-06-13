@@ -78,9 +78,11 @@ plugins/lark-connect
 
 - `.codex-plugin/plugin.json`：Codex 插件清单。
 - `.claude-plugin/plugin.json`：Claude Code 插件清单。
-- `codex.mcp.json`：Codex 使用的 MCP 配置。
-- `.mcp.json`：Claude Code 使用的 MCP 配置。
+- `codex.mcp.json`：Codex 使用的 MCP 配置，采用直接 server map。
+- `.mcp.json`：Claude Code 使用的 MCP 配置，采用 `mcpServers` 包裹格式。
 - `skills/`：配置飞书连接和长时间响应群消息的技能。
+
+两份 MCP 配置只是为了匹配不同插件加载器的文件格式，实际都会启动同一个 `curiosea-lark-connect@latest mcp` 服务。
 
 Codex 插件市场清单文件：
 

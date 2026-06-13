@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,10 +16,14 @@ function readText(relativePath) {
 }
 
 function assertNpxMcpServer(server) {
-  assert.equal(server.type, "stdio");
   assert.equal(server.command, "npx");
   assert.deepEqual(server.args, ["-y", "curiosea-lark-connect@latest", "mcp"]);
   assert.deepEqual(server.env, {});
+}
+
+function assertClaudeNpxMcpServer(server) {
+  assert.equal(server.type, "stdio");
+  assertNpxMcpServer(server);
 }
 
 describe("dual runtime plugin packaging", () => {
@@ -56,11 +60,15 @@ describe("dual runtime plugin packaging", () => {
   });
 
   it("ships MCP configs in the format expected by each runtime", () => {
+    assert.equal(existsSync(join(pluginRoot, "codex.mcp.json")), true);
+    assert.equal(existsSync(join(pluginRoot, ".mcp.json")), true);
+
     const codexMcp = readJson("plugins/lark-connect/codex.mcp.json");
-    assertNpxMcpServer(codexMcp.mcp_servers["lark-connect"]);
+    assert.deepEqual(Object.keys(codexMcp), ["lark-connect"]);
+    assertNpxMcpServer(codexMcp["lark-connect"]);
 
     const claudeMcp = readJson("plugins/lark-connect/.mcp.json");
-    assertNpxMcpServer(claudeMcp.mcpServers["lark-connect"]);
+    assertClaudeNpxMcpServer(claudeMcp.mcpServers["lark-connect"]);
   });
 
   it("ships setup and group responder skills at the plugin root", () => {
