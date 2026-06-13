@@ -1,5 +1,11 @@
+import { readFileSync } from "node:fs";
+
 import { resolveConfig } from "../config.js";
 import { createDaemonHttpClient } from "../daemon/http-client.js";
+
+const packageJson = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+);
 
 const TOOLS = [
   {
@@ -323,7 +329,7 @@ export async function handleMcpMessage(message, runtime = {}) {
         },
         serverInfo: {
           name: "curiosea-lark-connect",
-          version: "0.1.0",
+          version: packageJson.version,
         },
       });
     }

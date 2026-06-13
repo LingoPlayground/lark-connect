@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 
 function encodeMessage(message) {
   return `${JSON.stringify(message)}\n`;
@@ -61,6 +64,7 @@ describe("mcp server", () => {
       const initialized = await client.nextResponse();
       assert.equal(initialized.id, 1);
       assert.equal(initialized.result.serverInfo.name, "curiosea-lark-connect");
+      assert.equal(initialized.result.serverInfo.version, packageJson.version);
 
       client.send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
       const tools = await client.nextResponse();
