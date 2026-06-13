@@ -131,6 +131,24 @@ npm run build
 npm pack --dry-run
 ```
 
+## 发布
+
+发布通过 Git tag 触发，不手工运行 `npm publish`。
+
+1. 在 PR 里更新 `package.json` 的版本号并合并到 `main`。
+2. 确认 npmjs.com 已为 `curiosea-lark-connect` 配置 Trusted Publishing，绑定本仓库和 `.github/workflows/release.yml`。
+3. 在最新 `main` 上打和 `package.json` 一致的 tag：
+
+```bash
+git switch main
+git pull --ff-only
+VERSION=$(node -p "require('./package.json').version")
+git tag "v$VERSION"
+git push origin "v$VERSION"
+```
+
+Release workflow 会校验 tag 版本等于 `package.json`，然后运行测试、构建、打包预检、`npm publish --provenance`，并创建 GitHub Release。预发布 tag（例如 `v0.2.0-rc.1`）会被标记为 GitHub prerelease。
+
 ## 当前约束
 
 - 状态只保存在内存里；守护进程重启后，绑定和队列都会丢失。
