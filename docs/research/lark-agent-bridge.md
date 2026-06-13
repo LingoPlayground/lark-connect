@@ -33,6 +33,7 @@
 - `doctor --live`：用已配置的应用凭据做真实飞书 API 检查，包括获取租户访问令牌和查询机器人身份；传入 `--chat-id` 时额外检查目标群访问。
 - `debug listen-once --chat-id oc_xxx`：通过 `node-sdk Channel` 等待目标群里下一条提及机器人消息，输出归一化消息后退出。
 - `daemon start/status/stop`：启动、查看、停止本地守护进程；启动时从本地配置读取应用凭据，群聊由 MCP 绑定工具传入。
+- `wait --agent-session-id <id> --timeout-ms 300000`：通过本地守护进程等待指定 Agent 会话的已绑定群消息，面向 Claude Code background shell。
 - `mcp`：启动 MCP 标准输入输出服务。
 
 尚未实现：
@@ -281,7 +282,7 @@ Feishu group
 - `lark_connect_send_video` 已通过本仓库 MCP 标准输入输出入口真实发送到测试群，消息 ID 为 `om_redacted_video`，飞书侧 `msg_type` 为 `media`。
 - `node-sdk createLarkChannel` 已经确认能返回 `mentionedBot`、`mentions`、`resources` 等关键字段；本次普通群直接提及没有返回 `rootId`、`threadId`、`replyToMessageId`，这些需要在线程回复和附件场景继续验证。
 - 官方 `node-sdk` 的底层 `WSClient` 会创建内部清理定时器；一次性命令需要在打印结果后显式退出，避免命令行进程被内部定时器挂住。长期运行的 MCP 服务不走这个一次性退出路径。
-- `lark_connect_wait_messages` 只适合作为短等待工具；长时间等待设计师或产品反馈时，不应该阻塞当前 agent turn。插件技能已经区分 runtime：Codex 用 thread automation 定时唤醒后 `poll`，Claude Code 用 loop monitor 定时检查后 `poll`。
+- `lark_connect_wait_messages` 只适合作为短等待工具；长时间等待设计师或产品反馈时，不应该阻塞当前 agent turn。插件技能已经区分 runtime：Codex 用 thread automation 定时唤醒后 `poll`，Claude Code 用 background shell 运行 `curiosea-lark-connect wait` 复用 daemon wait，命令结束后唤醒 agent。
 
 ## 下一步建议
 

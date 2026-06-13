@@ -60,6 +60,8 @@ describe("dual runtime plugin packaging", () => {
   });
 
   it("ships MCP configs in the format expected by each runtime", () => {
+    assert.equal(existsSync(join(repoRoot, ".mcp.json")), false);
+    assert.equal(existsSync(join(repoRoot, ".codex", "config.toml")), false);
     assert.equal(existsSync(join(pluginRoot, "codex.mcp.json")), true);
     assert.equal(existsSync(join(pluginRoot, ".mcp.json")), true);
 
@@ -75,7 +77,9 @@ describe("dual runtime plugin packaging", () => {
     assert.equal(pluginRoot.endsWith(join("plugins", "lark-connect")), true);
 
     const setupSkill = readText("plugins/lark-connect/skills/lark-connect-setup/SKILL.md");
+    const setupOpenai = readText("plugins/lark-connect/skills/lark-connect-setup/agents/openai.yaml");
     assert.match(setupSkill, /^name: lark-connect-setup$/m);
+    assert.match(setupOpenai, /display_name: "lark-connect-setup"/);
     assert.match(setupSkill, /^# 飞书连接配置$/m);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest setup/);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest doctor --live/);
@@ -85,7 +89,14 @@ describe("dual runtime plugin packaging", () => {
     const responderSkill = readText(
       "plugins/lark-connect/skills/lark-connect-group-responder/SKILL.md",
     );
+    const responderOpenai = readText(
+      "plugins/lark-connect/skills/lark-connect-group-responder/agents/openai.yaml",
+    );
     assert.match(responderSkill, /^name: lark-connect-group-responder$/m);
+    assert.match(
+      responderOpenai,
+      /display_name: "lark-connect-group-responder"/,
+    );
     assert.match(responderSkill, /^# 飞书群消息响应$/m);
     assert.doesNotMatch(responderSkill, /验收/);
     assert.match(responderSkill, /lark_connect_bind_session/);
@@ -93,7 +104,11 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /lark_connect_wait_messages/);
     assert.match(responderSkill, /timeoutMs.*60000/);
     assert.match(responderSkill, /thread automation/);
-    assert.match(responderSkill, /loop monitor/);
+    assert.match(responderSkill, /background shell/);
+    assert.match(
+      responderSkill,
+      /npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000/,
+    );
     assert.match(responderSkill, /5 分钟/);
     assert.match(responderSkill, /最多循环 10 次/);
     assert.match(responderSkill, /lark_connect_ack_message/);

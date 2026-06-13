@@ -1,6 +1,6 @@
 {
   "name": "lark-connect",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "通过本地模型上下文协议服务，把 Codex 和 Claude Code 会话连接到飞书或 Lark 群聊，让智能体长时间响应被明确提及的群消息并处理相关任务。",
   "author": {
     "name": "LingoPlayground",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "lark-connect",
     "shortDescription": "把 Codex 和 Claude Code 会话接入飞书群聊消息响应流程",
-    "longDescription": "lark-connect 打包本地模型上下文协议服务和工作流技能，用于把 Codex thread 或 Claude Code session 绑定到飞书群，发送文本、文件、图片和视频，只接收明确提及机器人的消息，确认已处理消息，并下载收到的资源。短等待使用 MCP wait；长时间响应交给 Codex thread automation 或 Claude Code loop monitor 定时唤醒。",
+    "longDescription": "lark-connect 打包本地模型上下文协议服务和工作流技能，用于把 Codex thread 或 Claude Code session 绑定到飞书群，发送文本、文件、图片和视频，只接收明确提及机器人的消息，确认已处理消息，并下载收到的资源。短等待使用 MCP wait；长时间响应交给 Codex thread automation 或 Claude Code background shell 定时唤醒。",
     "developerName": "LingoPlayground",
     "category": "Productivity",
     "capabilities": [
