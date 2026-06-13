@@ -29,7 +29,7 @@ npx -y curiosea-lark-connect@latest setup
 npx -y curiosea-lark-connect@latest setup --app-id cli_xxx --app-secret <secret>
 ```
 
-不要在 setup 阶段要求或保存群聊 ID。群聊 ID 属于会话绑定参数。
+不要在 setup 阶段要求或保存聊天 ID。聊天 ID 属于会话绑定参数。
 
 3. 提醒用户确认飞书后台前置条件：
 

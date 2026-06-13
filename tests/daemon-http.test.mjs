@@ -75,6 +75,90 @@ describe("daemon http client", () => {
 });
 
 describe("daemon http server", () => {
+  it("searches chats through the local protocol without a bound session", async () => {
+    const observedSearches = [];
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats(input) {
+          observedSearches.push(input);
+          return {
+            query: input.query,
+            items: [
+              {
+                chatId: "oc_test",
+                name: "lark-connect 测试群",
+                chatMode: "group",
+                memberCount: 3,
+              },
+            ],
+            hasMore: false,
+            pageToken: "",
+            nextSteps: [],
+          };
+        },
+      },
+    });
+    try {
+      const result = await server.client.searchChats({
+        query: "测试群",
+        pageSize: 10,
+      });
+
+      assert.deepEqual(observedSearches, [
+        {
+          query: "测试群",
+          pageSize: 10,
+          pageToken: undefined,
+        },
+      ]);
+      assert.deepEqual(result.items.map((item) => item.chatId), ["oc_test"]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reports chat search failures", async () => {
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats() {
+          throw new Error("permission denied");
+        },
+      },
+    });
+    try {
+      await assert.rejects(
+        () => server.client.searchChats({ query: "测试群" }),
+        (error) =>
+          error?.code === "LARK_CHAT_SEARCH_FAILED" &&
+          error?.status === 502 &&
+          /permission denied/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid chat search requests before reporting Feishu failures", async () => {
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats() {
+          throw new Error("should not be wrapped as Feishu failure");
+        },
+      },
+    });
+    try {
+      await assert.rejects(
+        () => server.client.searchChats({ query: "测试群", pageSize: 0 }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /pageSize/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   it("binds a chat and exposes it through status", async () => {
     const server = await createTestServer();
     try {
@@ -123,6 +207,32 @@ describe("daemon http server", () => {
 
       const emptyWait = await server.client.waitForMessages("thread_a", { timeoutMs: 0 });
       assert.deepEqual(emptyWait.messages, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("routes bound direct messages without requiring a bot mention", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding({ chatId: "oc_dm" }));
+      server.runtime.receiveLarkMessage(
+        larkMessage({
+          messageId: "om_dm",
+          chatId: "oc_dm",
+          chatType: "p2p",
+          mentionedBot: false,
+        }),
+      );
+
+      const polled = await server.client.pollMessages("thread_a");
+      assert.deepEqual(
+        polled.messages.map((message) => ({
+          id: message.larkMessageId,
+          chatType: message.payload.chatType,
+        })),
+        [{ id: "om_dm", chatType: "p2p" }],
+      );
     } finally {
       await server.close();
     }

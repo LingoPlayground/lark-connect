@@ -32,6 +32,7 @@ describe("mcp daemon tools", () => {
       response.result.tools.map((tool) => tool.name),
       [
         "lark_connect_daemon_status",
+        "lark_connect_search_chats",
         "lark_connect_bind_session",
         "lark_connect_poll_messages",
         "lark_connect_wait_messages",
@@ -85,6 +86,43 @@ describe("mcp daemon tools", () => {
     });
     assert.deepEqual(parseToolJson(response), {
       binding: observedArgs,
+    });
+  });
+
+  it("forwards chat search calls to the local daemon client", async () => {
+    let observedArgs;
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_search_chats", {
+        query: "测试群",
+        pageSize: 10,
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          searchChats: async (args) => {
+            observedArgs = args;
+            return {
+              query: args.query,
+              items: [{ chatId: "oc_test", name: "lark-connect 测试群" }],
+              hasMore: false,
+              pageToken: "",
+              nextSteps: [],
+            };
+          },
+        }),
+      },
+    );
+
+    assert.deepEqual(observedArgs, {
+      query: "测试群",
+      pageSize: 10,
+      pageToken: undefined,
+    });
+    assert.deepEqual(parseToolJson(response), {
+      query: "测试群",
+      items: [{ chatId: "oc_test", name: "lark-connect 测试群" }],
+      hasMore: false,
+      pageToken: "",
+      nextSteps: [],
     });
   });
 

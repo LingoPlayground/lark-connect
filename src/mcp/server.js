@@ -18,12 +18,27 @@ const TOOLS = [
     },
   },
   {
-    name: "lark_connect_bind_session",
-    description: "Bind one Feishu group chat to the current Codex or Claude Code session.",
+    name: "lark_connect_search_chats",
+    description:
+      "Search Feishu group chats visible to the configured bot before binding a session.",
     inputSchema: {
       type: "object",
       properties: {
-        chatId: { type: "string", description: "Feishu group chat_id, for example oc_xxx." },
+        query: { type: "string", description: "Group chat name keyword to search." },
+        pageSize: { type: "number", description: "Maximum number of chats to return." },
+        pageToken: { type: "string", description: "Optional pagination token from a prior search." },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "lark_connect_bind_session",
+    description: "Bind one Feishu chat to the current Codex or Claude Code session.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chatId: { type: "string", description: "Feishu chat_id, for example oc_xxx." },
         agentKind: { type: "string", description: "Agent runtime, for example codex or claude-code." },
         agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
         workspace: { type: "string", description: "Absolute workspace path for this agent session." },
@@ -35,7 +50,7 @@ const TOOLS = [
   },
   {
     name: "lark_connect_poll_messages",
-    description: "Immediately poll pending Feishu mention messages for one agent session.",
+    description: "Immediately poll pending Feishu messages for one bound agent session.",
     inputSchema: {
       type: "object",
       properties: {
@@ -47,7 +62,7 @@ const TOOLS = [
   },
   {
     name: "lark_connect_wait_messages",
-    description: "Wait briefly for Feishu mention messages for one agent session.",
+    description: "Wait briefly for Feishu messages for one bound agent session.",
     inputSchema: {
       type: "object",
       properties: {
@@ -75,7 +90,7 @@ const TOOLS = [
   {
     name: "lark_connect_send_message",
     description:
-      "Send a text message to the Feishu group bound to one Codex or Claude Code session.",
+      "Send a text message to the Feishu chat bound to one Codex or Claude Code session.",
     inputSchema: {
       type: "object",
       properties: {
@@ -91,7 +106,7 @@ const TOOLS = [
   {
     name: "lark_connect_send_file",
     description:
-      "Send a local file to the Feishu group bound to one Codex or Claude Code session.",
+      "Send a local file to the Feishu chat bound to one Codex or Claude Code session.",
     inputSchema: {
       type: "object",
       properties: {
@@ -108,7 +123,7 @@ const TOOLS = [
   {
     name: "lark_connect_send_image",
     description:
-      "Send a local image to the Feishu group bound to one Codex or Claude Code session.",
+      "Send a local image to the Feishu chat bound to one Codex or Claude Code session.",
     inputSchema: {
       type: "object",
       properties: {
@@ -124,7 +139,7 @@ const TOOLS = [
   {
     name: "lark_connect_send_video",
     description:
-      "Send a local video to the Feishu group bound to one Codex or Claude Code session. A local cover image is required.",
+      "Send a local video to the Feishu chat bound to one Codex or Claude Code session. A local cover image is required.",
     inputSchema: {
       type: "object",
       properties: {
@@ -236,6 +251,16 @@ async function handleToolCall(params, runtime) {
 
     if (params?.name === "lark_connect_bind_session") {
       return jsonResult(await client.bindSession(args));
+    }
+
+    if (params?.name === "lark_connect_search_chats") {
+      return jsonResult(
+        await client.searchChats({
+          query: args.query,
+          pageSize: args.pageSize,
+          pageToken: args.pageToken,
+        }),
+      );
     }
 
     if (params?.name === "lark_connect_poll_messages") {

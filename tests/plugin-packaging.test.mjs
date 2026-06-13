@@ -30,18 +30,23 @@ describe("dual runtime plugin packaging", () => {
   it("defines Codex and Claude plugin manifests for the same plugin", () => {
     const codexManifest = readJson("plugins/lark-connect/.codex-plugin/plugin.json");
     assert.equal(codexManifest.name, "lark-connect");
+    assert.equal(codexManifest.version, "0.1.3");
     assert.equal(codexManifest.skills, "./skills/");
     assert.equal(codexManifest.mcpServers, "./codex.mcp.json");
     assert.match(codexManifest.description, /飞书/);
-    assert.match(codexManifest.interface.shortDescription, /群聊/);
-    assert.match(codexManifest.interface.longDescription, /只接收明确/);
+    assert.match(codexManifest.description, /搜索群聊/);
+    assert.match(codexManifest.interface.shortDescription, /搜索飞书群聊/);
+    assert.match(codexManifest.interface.longDescription, /lark_connect_search_chats|搜索机器人可见/);
+    assert.match(codexManifest.interface.longDescription, /已绑定单聊不要求提及/);
     assert.match(codexManifest.interface.defaultPrompt.join("\n"), /帮我配置/);
+    assert.match(codexManifest.interface.defaultPrompt.join("\n"), /搜索目标飞书群/);
 
     const claudeManifest = readJson("plugins/lark-connect/.claude-plugin/plugin.json");
     assert.equal(claudeManifest.name, "lark-connect");
     assert.equal(claudeManifest.version, codexManifest.version);
     assert.match(claudeManifest.description, /飞书/);
-    assert.match(claudeManifest.description, /群聊/);
+    assert.match(claudeManifest.description, /搜索群聊/);
+    assert.match(claudeManifest.description, /聊天消息/);
   });
 
   it("registers the plugin in Codex and Claude marketplaces", () => {
@@ -53,8 +58,10 @@ describe("dual runtime plugin packaging", () => {
 
     const claudeMarketplace = readJson(".claude-plugin/marketplace.json");
     assert.match(claudeMarketplace.description, /飞书/);
+    assert.match(claudeMarketplace.description, /搜索/);
     const claudeEntry = claudeMarketplace.plugins.find((entry) => entry.name === "lark-connect");
     assert.match(claudeEntry.description, /飞书/);
+    assert.match(claudeEntry.description, /搜索群聊/);
     assert.equal(claudeEntry.source, "./plugins/lark-connect");
     assert.equal(claudeEntry.category, "productivity");
   });
@@ -73,7 +80,7 @@ describe("dual runtime plugin packaging", () => {
     assertClaudeNpxMcpServer(claudeMcp.mcpServers["lark-connect"]);
   });
 
-  it("ships setup and group responder skills at the plugin root", () => {
+  it("ships setup and lark-connect skills at the plugin root", () => {
     assert.equal(pluginRoot.endsWith(join("plugins", "lark-connect")), true);
 
     const setupSkill = readText("plugins/lark-connect/skills/lark-connect-setup/SKILL.md");
@@ -86,21 +93,27 @@ describe("dual runtime plugin packaging", () => {
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest daemon start/);
     assert.match(setupSkill, /机器人.*加入目标群/);
 
+    assert.equal(
+      existsSync(join(pluginRoot, "skills", "lark-connect-group-responder")),
+      false,
+    );
+
     const responderSkill = readText(
-      "plugins/lark-connect/skills/lark-connect-group-responder/SKILL.md",
+      "plugins/lark-connect/skills/lark-connect/SKILL.md",
     );
     const responderOpenai = readText(
-      "plugins/lark-connect/skills/lark-connect-group-responder/agents/openai.yaml",
+      "plugins/lark-connect/skills/lark-connect/agents/openai.yaml",
     );
-    assert.match(responderSkill, /^name: lark-connect-group-responder$/m);
-    assert.match(
-      responderOpenai,
-      /display_name: "lark-connect-group-responder"/,
-    );
-    assert.match(responderSkill, /^# 飞书群消息响应$/m);
+    assert.match(responderSkill, /^name: lark-connect$/m);
+    assert.match(responderOpenai, /display_name: "lark-connect"/);
+    assert.match(responderSkill, /^# 飞书连接$/m);
     assert.doesNotMatch(responderSkill, /验收/);
+    assert.match(responderSkill, /lark_connect_search_chats/);
+    assert.match(responderSkill, /创建群/);
+    assert.match(responderSkill, /机器人拉入群/);
     assert.match(responderSkill, /lark_connect_bind_session/);
     assert.match(responderSkill, /不要编造/);
+    assert.match(responderSkill, /单聊/);
     assert.match(responderSkill, /lark_connect_wait_messages/);
     assert.match(responderSkill, /timeoutMs.*60000/);
     assert.match(responderSkill, /thread automation/);

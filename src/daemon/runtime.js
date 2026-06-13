@@ -232,7 +232,8 @@ export function createDaemonRuntime(options = {}) {
       if (larkMessageId) seenLarkMessageIds.add(larkMessageId);
 
       const binding = bindingsByChatId.get(payload.chatId);
-      if (!binding || !payload.mentionedBot) {
+      const directMessage = payload.chatType === "p2p";
+      if (!binding || (!directMessage && !payload.mentionedBot)) {
         return { accepted: false, reason: "unrouted" };
       }
 

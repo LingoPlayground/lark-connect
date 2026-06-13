@@ -54,6 +54,13 @@ export function createDaemonHttpClient(options = {}) {
       });
     },
 
+    searchChats(input = {}) {
+      return request("/chats/search", {
+        method: "POST",
+        body: input,
+      });
+    },
+
     pollMessages(agentSessionId) {
       return request(`/sessions/${encodeURIComponent(agentSessionId)}/messages`);
     },

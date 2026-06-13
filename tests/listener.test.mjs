@@ -154,6 +154,39 @@ describe("listenOnce", () => {
     assert.equal(result.messageId, "om_target");
   });
 
+  it("accepts direct messages from the target chat without a bot mention", async () => {
+    const channel = createFakeChannel();
+    const pending = listenOnce(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+        chatId: "oc_dm",
+      },
+      {
+        timeoutMs: 1000,
+        channelFactory: () => channel,
+      },
+    );
+
+    await Promise.resolve();
+    channel.emit("message", {
+      messageId: "om_dm",
+      chatId: "oc_dm",
+      chatType: "p2p",
+      senderId: "ou_sender",
+      content: "你好",
+      rawContentType: "text",
+      mentionedBot: false,
+      mentions: [],
+      resources: [],
+      createTime: 1,
+    });
+
+    const result = await pending;
+    assert.equal(result.messageId, "om_dm");
+    assert.equal(result.chatType, "p2p");
+  });
+
   it("times out and disconnects", async () => {
     const channel = createFakeChannel();
     await assert.rejects(

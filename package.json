@@ -1,6 +1,6 @@
 {
   "name": "curiosea-lark-connect",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Connect local coding agents to Feishu/Lark group feedback loops.",
   "license": "MIT",
   "type": "module",

@@ -1,0 +1,4 @@
+interface:
+  display_name: "lark-connect"
+  short_description: "搜索飞书群聊、绑定当前 Agent 会话并长时间响应聊天消息"
+  default_prompt: "搜索目标飞书群，把当前会话绑定到聊天，发送界面截图或录屏，然后持续响应聊天消息。"

@@ -1,15 +1,16 @@
 # curiosea-lark-connect
 
-`curiosea-lark-connect` 是一个把本地编码智能体连接到飞书或 Lark 群聊的命令行工具、MCP（Model Context Protocol，模型上下文协议）服务和双运行时插件。
+`curiosea-lark-connect` 是一个把本地编码智能体连接到飞书或 Lark 聊天的命令行工具、MCP（Model Context Protocol，模型上下文协议）服务和双运行时插件。
 
-它解决的核心问题是：设计师、产品经理或其他协作者可以在群里明确提及机器人；本地 Codex thread（线程）或 Claude Code session（会话）收到这条消息后继续处理任务，把文本、截图、录屏或文件发回群里，并在处理完成后给原消息添加确认反应。
+它解决的核心问题是：设计师、产品经理或其他协作者可以在群里明确提及机器人；本地 Codex thread（线程）或 Claude Code session（会话）收到这条消息后继续处理任务，把文本、截图、录屏或文件发回对应聊天，并在处理完成后给原消息添加确认反应。
 
 当前版本的设计边界：
 
 - 一个本地守护进程维护飞书长连接和本机内存状态。
-- 同一时间只允许一个飞书群绑定到一个智能体会话。
-- 只有真实提及机器人的群消息会进入队列。
-- 群聊 ID 不写入全局配置，只在 `lark_connect_bind_session` 里绑定。
+- 同一时间只允许一个飞书聊天绑定到一个智能体会话。
+- 群聊消息只有真实提及机器人时才会进入队列；已绑定单聊不要求提及机器人。
+- 群聊可以通过 `lark_connect_search_chats` 搜索；单聊不能被搜索发现，必须使用已知的 `chatId`。
+- 聊天 ID 不写入全局配置，只在 `lark_connect_bind_session` 里绑定。
 - 守护进程 1 小时没有飞书事件或本地调用后自动退出。
 
 ## 安装
@@ -19,7 +20,7 @@
 ### 前置条件
 
 - 本机有 Node.js 22 或更新版本。
-- 用户已经有一个飞书开放平台应用，并且机器人已经加入目标群。
+- 用户已经有一个飞书开放平台应用，并且机器人已经加入目标群，或用户已经知道机器人单聊的 `chatId`。
 - 应用已经开通接收消息事件和后续需要的飞书权限。接收消息至少需要消息事件订阅；确认消息会使用 reaction（反应）接口，通常还需要 `im:message` 和 `im:message.reactions:write_only`。
 - 目标运行时已经安装：Codex、Claude Code，或两者都有。
 
@@ -57,7 +58,7 @@ npx -y curiosea-lark-connect@latest setup
 npx -y curiosea-lark-connect@latest setup --app-id cli_xxx --app-secret '<secret>'
 ```
 
-这个命令只保存应用 ID 和应用密钥，不保存群聊 ID。默认配置文件位于：
+这个命令只保存应用 ID 和应用密钥，不保存聊天 ID。默认配置文件位于：
 
 ```text
 ~/.config/curiosea-lark-connect/config.json
@@ -89,30 +90,33 @@ npx -y curiosea-lark-connect@latest daemon status
 npx -y curiosea-lark-connect@latest daemon stop
 ```
 
-### 绑定群聊和会话
+### 搜索和绑定聊天
 
 在 Codex 或 Claude Code 里使用插件提供的 MCP 工具：
 
-1. 调用 `lark_connect_bind_session`。
-2. 传入 `chatId`、`agentKind`、`agentSessionId`、`workspace`。
-3. 如果目标群已经绑定到旧会话，只有在用户明确要求接管时才传 `replace: true`。
+1. 如果用户没有提供 `chatId`，先调用 `lark_connect_search_chats`，用群名或关键词搜索机器人可见群聊。
+2. 如果搜索不到目标群，提示用户确认群名；如果群不存在，请用户创建群；如果群已存在，请把当前应用机器人拉入群后重试。
+3. 找到目标群后，或用户已经提供已知单聊 `chatId` 后，调用 `lark_connect_bind_session`。
+4. 传入 `chatId`、`agentKind`、`agentSessionId`、`workspace`。
+5. 如果目标聊天已经绑定到旧会话，只有在用户明确要求接管时才传 `replace: true`。
 
 绑定后，常用工具是：
 
 | 工具 | 用途 |
 |---|---|
 | `lark_connect_daemon_status` | 查看守护进程状态。 |
-| `lark_connect_bind_session` | 把一个飞书群绑定到当前 Codex thread 或 Claude Code session。 |
+| `lark_connect_search_chats` | 搜索机器人可见的飞书群聊，返回候选 `chatId`。 |
+| `lark_connect_bind_session` | 把一个飞书聊天绑定到当前 Codex thread 或 Claude Code session。 |
 | `lark_connect_poll_messages` | 立即领取待处理的提及消息。 |
 | `lark_connect_wait_messages` | 限时等待提及消息。 |
 | `lark_connect_ack_message` | 确认一条消息已经处理完成，并给原始飞书消息添加 `OK` reaction（反应）。 |
-| `lark_connect_send_message` | 向当前绑定群发送文本，可选回复某条原消息。 |
-| `lark_connect_send_image` | 向当前绑定群发送本地图片。 |
-| `lark_connect_send_video` | 向当前绑定群发送本地视频和封面图。 |
-| `lark_connect_send_file` | 向当前绑定群发送本地文件。 |
+| `lark_connect_send_message` | 向当前绑定聊天发送文本，可选回复某条原消息。 |
+| `lark_connect_send_image` | 向当前绑定聊天发送本地图片。 |
+| `lark_connect_send_video` | 向当前绑定聊天发送本地视频和封面图。 |
+| `lark_connect_send_file` | 向当前绑定聊天发送本地文件。 |
 | `lark_connect_download_resource` | 下载当前会话收到的图片或文件资源。 |
 
-### 长时间等待群消息
+### 长时间等待聊天消息
 
 短等待用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`。如果 1 分钟没有消息，不要一直阻塞当前回合。
 
@@ -145,7 +149,7 @@ tests/                      node:test 测试
 
 ```mermaid
 flowchart LR
-  A["飞书群消息"] --> B["飞书长连接"]
+  A["飞书聊天消息"] --> B["飞书长连接"]
   B --> C["本地守护进程"]
   C --> D["MCP 工具"]
   D --> E["Codex 或 Claude Code 会话"]
@@ -158,9 +162,9 @@ flowchart LR
 关键路径：
 
 1. `daemon start` 使用飞书 Node.js SDK（软件开发工具包）建立长连接。
-2. 守护进程只接收已绑定群里明确提及机器人的消息。
+2. 守护进程接收已绑定聊天里的消息；群聊必须明确提及机器人，单聊不要求提及。
 3. 消息进入内存队列后，MCP 的 `poll` 或 `wait` 工具把消息交给绑定会话。
-4. 智能体处理任务后，通过发送工具把文本、图片、视频或文件发回群里。
+4. 智能体处理任务后，通过发送工具把文本、图片、视频或文件发回对应聊天。
 5. 智能体调用 `ack` 后，守护进程给原始飞书消息添加 `OK` reaction（反应），并把本地消息状态标为已确认。
 
 ### 配置和状态
@@ -168,7 +172,7 @@ flowchart LR
 - 应用 ID 和应用密钥保存在本机配置文件，文件权限设为 `0600`。
 - `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` 仍可作为运行时覆盖，但正式安装优先使用 `setup` 写入的本地配置。
 - `LARK_CONNECT_DAEMON_PORT` 可以覆盖本地守护进程端口，默认是 `51745`。
-- 绑定、消息队列和去重状态都只在守护进程内存里保存，进程重启后丢失。
+- 绑定、消息队列、搜索结果和去重状态都只在守护进程内存里保存，进程重启后丢失。
 - 当前不持久化 `thread_id` 或 `root_id`，它们只作为飞书消息元数据保留。
 
 ### 插件载荷
@@ -221,7 +225,7 @@ node src/cli.js daemon start
 node src/cli.js mcp
 ```
 
-调试指定群的一次提及事件：
+调试指定聊天的一次事件：
 
 ```bash
 node src/cli.js debug listen-once --chat-id oc_xxx

@@ -32,7 +32,7 @@ export async function createDefaultLarkChannel(config, options = {}) {
   const lark = await import("@larksuiteoapi/node-sdk");
   const policy = {
     requireMention: true,
-    dmMode: "disabled",
+    dmMode: "open",
   };
   if (options.groupAllowlist?.length) policy.groupAllowlist = options.groupAllowlist;
 
@@ -80,7 +80,7 @@ export async function listenOnce(config, options = {}) {
 
     unsubscribe = channel.on("message", (message) => {
       if (message.chatId !== config.chatId) return;
-      if (!message.mentionedBot) return;
+      if (message.chatType !== "p2p" && !message.mentionedBot) return;
       settle(resolve, normalizeMessage(message));
     });
 
