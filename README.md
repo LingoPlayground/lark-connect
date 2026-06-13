@@ -63,7 +63,7 @@ node src/cli.js mcp
 等包发布后，可以切到：
 
 ```bash
-npx curiosea-lark-connect mcp
+npx curiosea-lark-connect@latest mcp
 ```
 
 ## 插件
@@ -97,7 +97,7 @@ Claude Code 插件市场清单文件：
 插件里的 MCP 配置面向发布后的包，默认通过下面的命令启动服务：
 
 ```bash
-npx -y curiosea-lark-connect mcp
+npx -y curiosea-lark-connect@latest mcp
 ```
 
 ## MCP 工具

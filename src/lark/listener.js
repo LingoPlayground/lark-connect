@@ -28,13 +28,13 @@ export function normalizeMessage(message) {
   };
 }
 
-export async function createDefaultLarkChannel(config) {
+export async function createDefaultLarkChannel(config, options = {}) {
   const lark = await import("@larksuiteoapi/node-sdk");
   const policy = {
     requireMention: true,
     dmMode: "disabled",
   };
-  if (config.chatId) policy.groupAllowlist = [config.chatId];
+  if (options.groupAllowlist?.length) policy.groupAllowlist = options.groupAllowlist;
 
   return lark.createLarkChannel({
     appId: config.appId,
@@ -50,7 +50,7 @@ export async function listenOnce(config, options = {}) {
 
   const timeoutMs = options.timeoutMs ?? 120_000;
   const channelFactory = options.channelFactory ?? createDefaultLarkChannel;
-  const channel = await channelFactory(config);
+  const channel = await channelFactory(config, { groupAllowlist: [config.chatId] });
 
   let timeout;
   let unsubscribe;

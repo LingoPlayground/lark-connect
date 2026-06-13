@@ -19,6 +19,7 @@ function safePathSegment(value, fallback) {
 
 function safeFileName(value, fallback) {
   const candidate = basename(String(value ?? "").replaceAll("\0", "").trim())
+    .replace(/[\\/]+/g, "_")
     .replace(/[\r\n]/g, "")
     .trim();
   if (!candidate || candidate === "." || candidate === "..") return fallback;

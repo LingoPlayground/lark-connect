@@ -62,7 +62,7 @@ const TOOLS = [
         messageId: { type: "string", description: "Message id returned by poll or wait." },
         agentSessionId: { type: "string", description: "Optional owning agent session id." },
       },
-      required: ["messageId"],
+      required: ["messageId", "agentSessionId"],
       additionalProperties: false,
     },
   },
@@ -166,7 +166,13 @@ function decodeMessages(state, chunk) {
     state.buffer = state.buffer.subarray(newlineIndex + 1);
     if (line.length === 0) continue;
 
-    messages.push(JSON.parse(line));
+    try {
+      messages.push(JSON.parse(line));
+    } catch (error) {
+      messages.push({
+        __parseError: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 
@@ -342,7 +348,9 @@ export async function runMcpServer({ input, output }) {
   for await (const chunk of input) {
     const messages = decodeMessages(state, chunk);
     for (const message of messages) {
-      const response = await handleMcpMessage(message);
+      const response = message.__parseError
+        ? makeError(null, -32700, `parse error: ${message.__parseError}`)
+        : await handleMcpMessage(message);
       if (response) {
         output.write(encodeMessage(response));
       }

@@ -45,8 +45,6 @@ Usage:
 Environment:
   FEISHU_APP_ID
   FEISHU_APP_SECRET
-  FEISHU_CHAT_ID
-  LARK_CONNECT_DAEMON_HOST
   LARK_CONNECT_DAEMON_PORT
   LARK_CONNECT_DAEMON_IDLE_TIMEOUT_MS
   LARK_CONNECT_CONFIG_FILE
@@ -71,7 +69,6 @@ function resolveCliConfig(argv, runtime = {}) {
     appId: readOption(argv, "--app-id"),
     appSecret: readOption(argv, "--app-secret"),
     chatId: readOption(argv, "--chat-id"),
-    daemonHost: readOption(argv, "--daemon-host"),
     daemonPort: readOption(argv, "--daemon-port"),
     daemonIdleTimeoutMs: readOption(argv, "--daemon-idle-timeout-ms"),
   }, env, savedConfig);

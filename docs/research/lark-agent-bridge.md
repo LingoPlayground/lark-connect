@@ -38,9 +38,8 @@
 尚未实现：
 
 - 从钥匙串或 `lark-cli` 读取明文 `appSecret`
-- 长等待的 agent 唤醒 skill
 - 音视频资源下载
-- 插件打包和面向非开发同事的协作 skill
+- 面向非开发同事的协作 skill
 
 ## 已调研资产
 
@@ -282,13 +281,13 @@ Feishu group
 - `lark_connect_send_video` 已通过本仓库 MCP 标准输入输出入口真实发送到测试群，消息 ID 为 `om_redacted_video`，飞书侧 `msg_type` 为 `media`。
 - `node-sdk createLarkChannel` 已经确认能返回 `mentionedBot`、`mentions`、`resources` 等关键字段；本次普通群直接提及没有返回 `rootId`、`threadId`、`replyToMessageId`，这些需要在线程回复和附件场景继续验证。
 - 官方 `node-sdk` 的底层 `WSClient` 会创建内部清理定时器；一次性命令需要在打印结果后显式退出，避免命令行进程被内部定时器挂住。长期运行的 MCP 服务不走这个一次性退出路径。
-- `lark_connect_wait_messages` 只适合作为短等待工具；长时间等待设计师或产品反馈时，不应该阻塞当前 agent turn。后续插件 skill 需要区分 runtime：Codex 用 thread automation 定时唤醒后 `poll`，Claude Code 用 loop monitor 定时检查后 `poll`。
+- `lark_connect_wait_messages` 只适合作为短等待工具；长时间等待设计师或产品反馈时，不应该阻塞当前 agent turn。插件技能已经区分 runtime：Codex 用 thread automation 定时唤醒后 `poll`，Claude Code 用 loop monitor 定时检查后 `poll`。
 
 ## 下一步建议
 
 1. 用真实群继续验证线程回复、图片、文件、录屏附件，确认 `rootId`、`threadId`、`replyToMessageId`、`resources` 和下载后的文件可读性。
 2. 评估是否需要音视频下载和单独添加 reaction 的工具；当前文本、文件、图片、视频发送，图片 / 文件下载，以及确认 reaction 已经覆盖主要验收素材。
-3. 最后再把 MCP、配置引导和协作说明打包进 Codex 插件，并补配套 skill。
+3. 补面向非开发同事的协作说明，解释如何 @ 机器人、如何描述反馈，以及可以期待 Agent 回传什么状态。
 
 ## 参考资料
 

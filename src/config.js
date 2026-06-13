@@ -7,6 +7,7 @@ const FEISHU_APP_URL_RE = /https:\/\/open\.feishu\.cn\/app\/([^/\s]+)\/baseinfo/
 export const DEFAULT_DAEMON_HOST = "127.0.0.1";
 export const DEFAULT_DAEMON_PORT = 51745;
 export const DEFAULT_DAEMON_IDLE_TIMEOUT_MS = 3_600_000;
+export const MAX_DAEMON_IDLE_TIMEOUT_MS = 2_147_483_647;
 export const CONFIG_FILE_ENV = "LARK_CONNECT_CONFIG_FILE";
 
 function parseIntegerOption(value, fallback, name, options = {}) {
@@ -100,10 +101,8 @@ export function resolveConfig(explicit = {}, env = process.env, savedConfig = {}
   const appSecret = String(
     explicit.appSecret ?? env.FEISHU_APP_SECRET ?? savedConfig.appSecret ?? "",
   ).trim();
-  const chatId = String(explicit.chatId ?? env.FEISHU_CHAT_ID ?? "").trim();
-  const daemonHost = String(
-    explicit.daemonHost ?? env.LARK_CONNECT_DAEMON_HOST ?? DEFAULT_DAEMON_HOST,
-  ).trim();
+  const chatId = String(explicit.chatId ?? "").trim();
+  const daemonHost = DEFAULT_DAEMON_HOST;
   const daemonPort = parseIntegerOption(
     explicit.daemonPort ?? env.LARK_CONNECT_DAEMON_PORT,
     DEFAULT_DAEMON_PORT,
@@ -114,6 +113,7 @@ export function resolveConfig(explicit = {}, env = process.env, savedConfig = {}
     explicit.daemonIdleTimeoutMs ?? env.LARK_CONNECT_DAEMON_IDLE_TIMEOUT_MS,
     DEFAULT_DAEMON_IDLE_TIMEOUT_MS,
     "daemon idle timeout",
+    { max: MAX_DAEMON_IDLE_TIMEOUT_MS },
   );
 
   return {

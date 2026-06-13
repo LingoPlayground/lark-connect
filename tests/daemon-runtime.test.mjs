@@ -65,13 +65,37 @@ describe("daemon runtime bindings", () => {
     assert.deepEqual(runtime.snapshot().bindings, [result]);
   });
 
-  it("rejects a second binding for the same chat unless replace is explicit", () => {
+  it("rejects incomplete bindings before mutating runtime state", () => {
+    const { runtime } = createTestRuntime();
+
+    for (const [field, value] of [
+      ["chatId", ""],
+      ["agentKind", ""],
+      ["agentSessionId", ""],
+      ["workspace", ""],
+    ]) {
+      assert.throws(
+        () => runtime.bindSession(binding({ [field]: value })),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.details?.field === field,
+      );
+    }
+
+    assert.deepEqual(runtime.snapshot().bindings, []);
+    assert.deepEqual(runtime.snapshot().sessions, []);
+  });
+
+  it("rejects any second binding unless replace is explicit", () => {
     const { runtime } = createTestRuntime();
     runtime.bindSession(binding());
 
     // VAL-BIND-002: the original binding survives a non-replace conflict.
     assert.throws(
-      () => runtime.bindSession(binding({ agentSessionId: "thread_b" })),
+      () =>
+        runtime.bindSession(
+          binding({ chatId: "oc_other", agentSessionId: "thread_b" }),
+        ),
       (error) => error?.code === "BINDING_CONFLICT",
     );
 
@@ -85,13 +109,20 @@ describe("daemon runtime bindings", () => {
     assert.equal(runtime.pollMessages("thread_a").length, 1);
 
     // VAL-BIND-003 and VAL-BIND-004: replace makes the new session unique and old messages disappear.
-    runtime.bindSession(binding({ agentSessionId: "thread_b", replace: true }));
-    runtime.receiveLarkMessage(larkMessage({ messageId: "om_after_replace" }));
+    runtime.bindSession(binding({ chatId: "oc_other", agentSessionId: "thread_b", replace: true }));
 
     assert.deepEqual(runtime.snapshot().bindings.map((item) => item.agentSessionId), ["thread_b"]);
+    assert.deepEqual(runtime.snapshot().bindings.map((item) => item.chatId), ["oc_other"]);
     assert.throws(
       () => runtime.pollMessages("thread_a"),
       (error) => error?.code === DAEMON_ERROR_CODES.SESSION_NOT_BOUND,
+    );
+    assert.deepEqual(runtime.receiveLarkMessage(larkMessage({ messageId: "om_old_chat" })), {
+      accepted: false,
+      reason: "unrouted",
+    });
+    runtime.receiveLarkMessage(
+      larkMessage({ messageId: "om_after_replace", chatId: "oc_other" }),
     );
     assert.deepEqual(
       runtime.pollMessages("thread_b").map((message) => message.larkMessageId),
@@ -264,8 +295,8 @@ describe("daemon runtime messages", () => {
     assert.throws(
       () => runtime.ackMessage("om_missing"),
       (error) =>
-        error?.code === DAEMON_ERROR_CODES.SESSION_NOT_BOUND &&
-        Object.keys(error?.details ?? {}).length === 0,
+        error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+        error?.details?.field === "agentSessionId",
     );
   });
 });

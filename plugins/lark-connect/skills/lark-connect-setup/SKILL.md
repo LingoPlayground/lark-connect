@@ -12,45 +12,47 @@ description: 配置 lark-connect。当用户需要连接飞书或 Lark 机器人
 1. 检查包命令是否可用：
 
 ```bash
-curiosea-lark-connect --help
+npx -y curiosea-lark-connect@latest --help
 ```
 
-如果没有全局安装包，改用发布包形式：
-
-```bash
-npx -y curiosea-lark-connect --help
-```
+后续示例都使用同一个发布包命令，除非用户已经明确全局安装了可用版本。
 
 2. 如果缺少凭据，先输出配置引导：
 
 ```bash
-curiosea-lark-connect setup
+npx -y curiosea-lark-connect@latest setup
 ```
 
 用户提供应用 ID 和应用密钥后，保存到本地配置：
 
 ```bash
-curiosea-lark-connect setup --app-id cli_xxx --app-secret <secret>
+npx -y curiosea-lark-connect@latest setup --app-id cli_xxx --app-secret <secret>
 ```
 
 不要在 setup 阶段要求或保存群聊 ID。群聊 ID 属于会话绑定参数。
 
-3. 凭据保存后运行真实连通性检查：
+3. 提醒用户确认飞书后台前置条件：
+
+- 机器人已经加入目标群。
+- 应用已经开通接收消息事件需要的权限和事件订阅。
+- 如果后续需要发送消息、添加 reaction、下载资源，相应权限也要在飞书后台开通。
+
+4. 凭据保存后运行真实连通性检查：
 
 ```bash
-curiosea-lark-connect doctor --live
+npx -y curiosea-lark-connect@latest doctor --live
 ```
 
-4. 当模型上下文协议工具返回 `DAEMON_NOT_RUNNING` 时，启动守护进程：
+5. 当模型上下文协议工具返回 `DAEMON_NOT_RUNNING` 时，启动守护进程：
 
 ```bash
-curiosea-lark-connect daemon start
+npx -y curiosea-lark-connect@latest daemon start
 ```
 
 然后检查状态：
 
 ```bash
-curiosea-lark-connect daemon status
+npx -y curiosea-lark-connect@latest daemon status
 ```
 
 ## 规则
