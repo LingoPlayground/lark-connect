@@ -18,7 +18,7 @@ function readText(relativePath) {
 function assertNpxMcpServer(server) {
   assert.equal(server.type, "stdio");
   assert.equal(server.command, "npx");
-  assert.deepEqual(server.args, ["-y", "curiosea-lark-connect@0.1.0", "mcp"]);
+  assert.deepEqual(server.args, ["-y", "curiosea-lark-connect@latest", "mcp"]);
   assert.deepEqual(server.env, {});
 }
 
@@ -69,9 +69,9 @@ describe("dual runtime plugin packaging", () => {
     const setupSkill = readText("plugins/lark-connect/skills/lark-connect-setup/SKILL.md");
     assert.match(setupSkill, /^name: lark-connect-setup$/m);
     assert.match(setupSkill, /^# 飞书连接配置$/m);
-    assert.match(setupSkill, /npx -y curiosea-lark-connect@0\.1\.0 setup/);
-    assert.match(setupSkill, /npx -y curiosea-lark-connect@0\.1\.0 doctor --live/);
-    assert.match(setupSkill, /npx -y curiosea-lark-connect@0\.1\.0 daemon start/);
+    assert.match(setupSkill, /npx -y curiosea-lark-connect@latest setup/);
+    assert.match(setupSkill, /npx -y curiosea-lark-connect@latest doctor --live/);
+    assert.match(setupSkill, /npx -y curiosea-lark-connect@latest daemon start/);
     assert.match(setupSkill, /机器人.*加入目标群/);
 
     const responderSkill = readText(
