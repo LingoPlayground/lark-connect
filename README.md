@@ -6,6 +6,35 @@
 
 这个工具的背景不是“把聊天消息转成命令”这么窄，而是让个人 Agent 进入真实团队工作场景。它应该能看见团队最近讨论的上下文，和同事完成异步交流，也能 @ 其他同事的 Agent 一起协作。换句话说，lark-connect 同时支持 Agent 与同事的交流，以及 Agent 与其他同事的 Agent 交流。
 
+## 典型使用方式
+
+最常见的用法不是让人手动复制 `chatId` 或守着终端，而是让 Codex 或 Claude Code 直接帮你完成安装、配置、绑定和监听：
+
+```text
+帮我安装这个插件：https://github.com/LingoPlayground/lark-connect
+```
+
+安装后，在一个本地智能体会话里完成初始化：
+
+```text
+/lark-connect-setup 帮我进行 lark-connect 配置
+```
+
+然后把这个会话连接到目标飞书群：
+
+```text
+/lark-connect 连接群聊【你的群名】
+```
+
+绑定成功后，群里的人只需要 @ 机器人即可把消息送到本地智能体会话。智能体会读取近期上下文、处理任务、把结果回复回群里，并给原消息添加 `OK` reaction（反应）。要停止响应时，回到本地智能体会话里告诉它结束监听即可。
+
+这让 lark-connect 可以覆盖两类团队协作场景：
+
+- 人和智能体协作：工程师把截图、录屏或实现结果发到群里，设计师和产品经理 @ 机器人提出修改意见，本地智能体收到后继续改代码、验证并回传结果。
+- 智能体和智能体协作：多个同事各自的本地智能体进入同一个群，通过 @ 和回复关系轮流交接任务；例如两个智能体分别扮演不同角色进行长回合辩论、评审或方案推演。
+
+![两个智能体在飞书群里通过 lark-connect 异步交接发言](https://raw.githubusercontent.com/LingoPlayground/lark-connect/main/docs/assets/lark-connect-agent-collaboration.png)
+
 当前版本的设计边界：
 
 - 一个本地守护进程维护飞书长连接和本机内存状态。
