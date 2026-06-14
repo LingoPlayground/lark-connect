@@ -33,6 +33,38 @@ const TOOLS = [
     },
   },
   {
+    name: "lark_connect_wait_direct_chat_signal",
+    description:
+      "Wait for a user to send an exact challenge text to the configured bot in a Feishu direct chat, then return the discovered p2p chat_id for explicit binding.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        challengeText: {
+          type: "string",
+          description: "Exact text the user must send to the bot direct chat.",
+        },
+        agentKind: {
+          type: "string",
+          description: "Agent runtime, for example codex or claude-code.",
+        },
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        workspace: {
+          type: "string",
+          description: "Absolute workspace path for this agent session.",
+        },
+        timeoutMs: {
+          type: "number",
+          description: "Maximum wait time in milliseconds.",
+        },
+      },
+      required: ["challengeText", "agentKind", "agentSessionId", "workspace"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "lark_connect_bind_session",
     description: "Bind one Feishu chat to the current Codex or Claude Code session.",
     inputSchema: {
@@ -259,6 +291,18 @@ async function handleToolCall(params, runtime) {
           query: args.query,
           pageSize: args.pageSize,
           pageToken: args.pageToken,
+        }),
+      );
+    }
+
+    if (params?.name === "lark_connect_wait_direct_chat_signal") {
+      return jsonResult(
+        await client.waitDirectChatSignal({
+          challengeText: args.challengeText,
+          agentKind: args.agentKind,
+          agentSessionId: args.agentSessionId,
+          workspace: args.workspace,
+          timeoutMs: args.timeoutMs,
         }),
       );
     }

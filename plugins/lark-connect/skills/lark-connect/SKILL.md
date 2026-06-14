@@ -1,6 +1,6 @@
 ---
 name: lark-connect
-description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-connect、搜索机器人可见群聊、把当前 Codex thread 或 Claude Code session 绑定到聊天、发送截图、录屏、文件或文本、等待或轮询消息、确认已处理消息、下载收到的资源，并持续根据聊天消息处理任务时使用。
+description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-connect、搜索机器人可见群聊、用挑战码发现机器人单聊、把当前 Codex thread 或 Claude Code session 绑定到聊天、发送截图、录屏、文件或文本、等待或轮询消息、确认已处理消息、下载收到的资源，并持续根据聊天消息处理任务时使用。
 ---
 
 # 飞书连接
@@ -11,7 +11,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 如果 MCP 工具返回 `DAEMON_NOT_RUNNING`，先按 `lark-connect-setup` 技能启动守护进程。
 
-如果用户没有提供 `chatId`，先用 `lark_connect_search_chats` 按用户给出的群名或关键词搜索机器人可见群聊。
+如果目标是群聊且用户没有提供 `chatId`，先用 `lark_connect_search_chats` 按用户给出的群名或关键词搜索机器人可见群聊。
 
 搜索结果处理规则：
 
@@ -19,7 +19,9 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 - 如果有多个相近结果，把候选群名和 `chatId` 简短列给用户，让用户选择。
 - 如果没有结果，提醒用户确认群名；如果目标群还不存在，请创建群；如果群已存在，请把当前飞书应用的机器人拉入群后再重试搜索。
 
-`lark_connect_search_chats` 搜索的是机器人可见群聊，不承诺发现用户和机器人的单聊。单聊只有在已知 `chatId` 时才直接进入绑定流程。
+如果目标是单聊且用户没有提供 `chatId`，不要要求用户手动查找 `chatId`。生成一段唯一挑战文本，例如 `lark-connect bind 8F2K`。先把这段文本展示给用户，请用户打开当前机器人单聊并原样发送；然后调用 `lark_connect_wait_direct_chat_signal`，传入同一段 `challengeText`、`agentKind`、`agentSessionId`、`workspace` 和 `timeoutMs: 60000`。工具返回 `signal.bindingInput` 后，再用其中的 `chatId` 调用 `lark_connect_bind_session`。
+
+`lark_connect_search_chats` 搜索的是机器人可见群聊，不用于发现用户和机器人的单聊。`lark_connect_wait_direct_chat_signal` 只负责发现单聊，不会自动绑定。
 
 ## 绑定
 
@@ -27,7 +29,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 必需值：
 
-- `chatId`：飞书聊天 ID，通常形如 `oc_xxx`。可以来自 `lark_connect_search_chats` 的结果，也可以由用户提供。
+- `chatId`：飞书聊天 ID，通常形如 `oc_xxx`。可以来自 `lark_connect_search_chats` 的结果、`lark_connect_wait_direct_chat_signal` 的 `signal.bindingInput.chatId`，也可以由用户提供。
 - `agentKind`：Codex 使用 `codex`，Claude Code 使用 `claude-code`。
 - `agentSessionId`：Codex thread ID 或 Claude Code session ID。
 - `workspace`：当前工作区的绝对路径。

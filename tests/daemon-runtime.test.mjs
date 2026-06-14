@@ -321,6 +321,131 @@ describe("daemon runtime messages", () => {
   });
 });
 
+describe("daemon runtime direct chat signals", () => {
+  it("resolves a waiting direct chat signal only from a matching p2p challenge", async () => {
+    const { runtime } = createTestRuntime();
+    const challengeText = "lark-connect bind 8F2K";
+    const pending = runtime.waitForDirectChatSignal({
+      challengeText,
+      agentKind: "codex",
+      agentSessionId: "thread_a",
+      workspace: "/workspace/app",
+      timeoutMs: 1_000,
+    });
+
+    assert.deepEqual(
+      runtime.receiveLarkMessage(
+        larkMessage({
+          messageId: "om_group",
+          chatId: "oc_group",
+          chatType: "group",
+          content: challengeText,
+          mentionedBot: true,
+        }),
+      ),
+      { accepted: false, reason: "unrouted" },
+    );
+    assert.deepEqual(
+      runtime.receiveLarkMessage(
+        larkMessage({
+          messageId: "om_wrong",
+          chatId: "oc_dm",
+          chatType: "p2p",
+          content: "not the challenge",
+          mentionedBot: false,
+        }),
+      ),
+      { accepted: false, reason: "unrouted" },
+    );
+
+    const received = runtime.receiveLarkMessage(
+      larkMessage({
+        messageId: "om_signal",
+        chatId: "oc_dm",
+        chatType: "p2p",
+        content: "  lark-connect bind 8F2K  ",
+        mentionedBot: false,
+        senderId: "ou_sender",
+        senderName: "Ben",
+      }),
+    );
+
+    assert.equal(received.accepted, true);
+    assert.equal(received.reason, "direct_chat_signal");
+    const signal = await pending;
+    assert.equal(signal.chatId, "oc_dm");
+    assert.equal(signal.messageId, "om_signal");
+    assert.equal(signal.senderId, "ou_sender");
+    assert.equal(signal.matchedChallenge, challengeText);
+    assert.deepEqual(signal.bindingInput, {
+      chatId: "oc_dm",
+      agentKind: "codex",
+      agentSessionId: "thread_a",
+      workspace: "/workspace/app",
+    });
+    assert.deepEqual(runtime.snapshot().bindings, []);
+  });
+
+  it("can match a recent unbound p2p challenge that arrived before the wait call", async () => {
+    const { runtime } = createTestRuntime();
+
+    assert.deepEqual(
+      runtime.receiveLarkMessage(
+        larkMessage({
+          messageId: "om_buffered_signal",
+          chatId: "oc_dm",
+          chatType: "p2p",
+          content: "lark-connect bind READY",
+          mentionedBot: false,
+        }),
+      ),
+      { accepted: false, reason: "unrouted" },
+    );
+
+    const signal = await runtime.waitForDirectChatSignal({
+      challengeText: "lark-connect bind READY",
+      agentKind: "claude-code",
+      agentSessionId: "session_a",
+      workspace: "/workspace/app",
+      timeoutMs: 0,
+    });
+
+    assert.equal(signal.chatId, "oc_dm");
+    assert.equal(signal.bindingInput.agentKind, "claude-code");
+    assert.equal(signal.bindingInput.agentSessionId, "session_a");
+  });
+
+  it("does not consume bound p2p messages as direct chat discovery signals", async () => {
+    const { runtime } = createTestRuntime();
+    runtime.bindSession(binding({ chatId: "oc_dm" }));
+    const pending = runtime.waitForDirectChatSignal({
+      challengeText: "lark-connect bind BOUND",
+      agentKind: "codex",
+      agentSessionId: "thread_b",
+      workspace: "/workspace/app",
+      timeoutMs: 0,
+    });
+
+    const received = runtime.receiveLarkMessage(
+      larkMessage({
+        messageId: "om_bound_dm",
+        chatId: "oc_dm",
+        chatType: "p2p",
+        content: "lark-connect bind BOUND",
+        mentionedBot: false,
+      }),
+    );
+
+    assert.equal(received.accepted, true);
+    assert.equal(received.reason, undefined);
+    assert.equal(await pending, null);
+    assert.deepEqual(
+      runtime.pollMessages("thread_a").map((message) => message.larkMessageId),
+      ["om_bound_dm"],
+    );
+  });
+});
+
 describe("daemon runtime activity", () => {
   it("refreshes the idle deadline when any lark event arrives", () => {
     const harness = createTestRuntime();

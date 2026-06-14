@@ -210,6 +210,17 @@ function requireObjectBody(body) {
   return body;
 }
 
+function normalizeDirectChatSignalWaitBody(body) {
+  const input = requireObjectBody(body);
+  return {
+    challengeText: input.challengeText,
+    agentKind: input.agentKind,
+    agentSessionId: input.agentSessionId,
+    workspace: input.workspace,
+    timeoutMs: input.timeoutMs,
+  };
+}
+
 function requireStringField(value, fieldName) {
   if (typeof value !== "string") {
     const error = new Error(`${fieldName} must be a string`);
@@ -525,6 +536,15 @@ export function createDaemonHttpServer(options = {}) {
       if (request.method === "POST" && pathname === "/chats/search") {
         const body = await readJsonBody(request);
         sendJson(response, 200, await searchChats(chatClient, body));
+        return;
+      }
+
+      if (request.method === "POST" && pathname === "/direct-chat/signals/wait") {
+        const body = await readJsonBody(request);
+        const signal = await runtime.waitForDirectChatSignal(
+          normalizeDirectChatSignalWaitBody(body),
+        );
+        sendJson(response, 200, { signal });
         return;
       }
 

@@ -33,6 +33,7 @@ describe("mcp daemon tools", () => {
       [
         "lark_connect_daemon_status",
         "lark_connect_search_chats",
+        "lark_connect_wait_direct_chat_signal",
         "lark_connect_bind_session",
         "lark_connect_poll_messages",
         "lark_connect_wait_messages",
@@ -124,6 +125,49 @@ describe("mcp daemon tools", () => {
       pageToken: "",
       nextSteps: [],
     });
+  });
+
+  it("forwards direct chat signal waits to the local daemon client", async () => {
+    let observedArgs;
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_wait_direct_chat_signal", {
+        challengeText: "lark-connect bind 8F2K",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 60_000,
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          waitDirectChatSignal: async (args) => {
+            observedArgs = args;
+            return {
+              signal: {
+                chatId: "oc_dm",
+                chatType: "p2p",
+                messageId: "om_signal",
+                matchedChallenge: args.challengeText,
+                bindingInput: {
+                  chatId: "oc_dm",
+                  agentKind: args.agentKind,
+                  agentSessionId: args.agentSessionId,
+                  workspace: args.workspace,
+                },
+              },
+            };
+          },
+        }),
+      },
+    );
+
+    assert.deepEqual(observedArgs, {
+      challengeText: "lark-connect bind 8F2K",
+      agentKind: "codex",
+      agentSessionId: "thread_a",
+      workspace: "/workspace/app",
+      timeoutMs: 60_000,
+    });
+    assert.equal(parseToolJson(response).signal.chatId, "oc_dm");
   });
 
   it("returns empty chat search next steps through the tool result", async () => {

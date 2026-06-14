@@ -9,7 +9,7 @@
 - 一个本地守护进程维护飞书长连接和本机内存状态。
 - 同一时间只允许一个飞书聊天绑定到一个智能体会话。
 - 群聊消息只有真实提及机器人时才会进入队列；已绑定单聊不要求提及机器人。
-- 群聊可以通过 `lark_connect_search_chats` 搜索；单聊不能被搜索发现，必须使用已知的 `chatId`。
+- 群聊可以通过 `lark_connect_search_chats` 搜索；单聊可以让用户给机器人私聊发送挑战码，再用 `lark_connect_wait_direct_chat_signal` 发现 `chatId`。
 - 聊天 ID 不写入全局配置，只在 `lark_connect_bind_session` 里绑定。
 - 守护进程 1 小时没有飞书事件或本地调用后自动退出。
 
@@ -20,7 +20,7 @@
 ### 前置条件
 
 - 本机有 Node.js 22 或更新版本。
-- 用户已经有一个飞书开放平台应用，并且机器人已经加入目标群，或用户已经知道机器人单聊的 `chatId`。
+- 用户已经有一个飞书开放平台应用，并且机器人已经加入目标群，或用户可以打开机器人单聊发送确认挑战码。
 - 应用已经开通接收消息事件和后续需要的飞书权限。接收消息至少需要消息事件订阅；确认消息会使用 reaction（反应）接口，通常还需要 `im:message` 和 `im:message.reactions:write_only`。
 - 目标运行时已经安装：Codex、Claude Code，或两者都有。
 
@@ -94,11 +94,12 @@ npx -y curiosea-lark-connect@latest daemon stop
 
 在 Codex 或 Claude Code 里使用插件提供的 MCP 工具：
 
-1. 如果用户没有提供 `chatId`，先调用 `lark_connect_search_chats`，用群名或关键词搜索机器人可见群聊。
+1. 如果目标是群聊且用户没有提供 `chatId`，先调用 `lark_connect_search_chats`，用群名或关键词搜索机器人可见群聊。
 2. 如果搜索不到目标群，提示用户确认群名；如果群不存在，请用户创建群；如果群已存在，请把当前应用机器人拉入群后重试。
-3. 找到目标群后，或用户已经提供已知单聊 `chatId` 后，调用 `lark_connect_bind_session`。
-4. 传入 `chatId`、`agentKind`、`agentSessionId`、`workspace`。
-5. 如果目标聊天已经绑定到旧会话，只有在用户明确要求接管时才传 `replace: true`。
+3. 如果目标是单聊且用户没有提供 `chatId`，生成一段唯一挑战文本，先把这段文本展示给用户，请用户在机器人单聊里原样发送；然后调用 `lark_connect_wait_direct_chat_signal` 等待这条私聊消息。
+4. 拿到目标群或单聊 `chatId` 后，调用 `lark_connect_bind_session`。
+5. 传入 `chatId`、`agentKind`、`agentSessionId`、`workspace`。
+6. 如果目标聊天已经绑定到旧会话，只有在用户明确要求接管时才传 `replace: true`。
 
 绑定后，常用工具是：
 
@@ -106,6 +107,7 @@ npx -y curiosea-lark-connect@latest daemon stop
 |---|---|
 | `lark_connect_daemon_status` | 查看守护进程状态。 |
 | `lark_connect_search_chats` | 搜索机器人可见的飞书群聊，返回候选 `chatId`。 |
+| `lark_connect_wait_direct_chat_signal` | 等待用户给机器人单聊发送指定挑战文本，返回单聊 `chatId` 和建议绑定参数。 |
 | `lark_connect_bind_session` | 把一个飞书聊天绑定到当前 Codex thread 或 Claude Code session。 |
 | `lark_connect_poll_messages` | 立即领取当前绑定聊天的待处理消息。 |
 | `lark_connect_wait_messages` | 限时等待当前绑定聊天的待处理消息。 |

@@ -237,6 +237,76 @@ describe("daemon http server", () => {
     }
   });
 
+  it("waits for a direct chat signal through the local protocol", async () => {
+    const server = await createTestServer();
+    try {
+      const pending = server.client.waitDirectChatSignal({
+        challengeText: "lark-connect bind 8F2K",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 1_000,
+      });
+
+      server.runtime.receiveLarkMessage({
+        messageId: "om_signal",
+        chatId: "oc_dm",
+        chatType: "p2p",
+        content: "lark-connect bind 8F2K",
+        mentionedBot: false,
+        senderId: "ou_sender",
+      });
+
+      const result = await pending;
+
+      assert.equal(result.signal.chatId, "oc_dm");
+      assert.equal(result.signal.messageId, "om_signal");
+      assert.deepEqual(result.signal.bindingInput, {
+        chatId: "oc_dm",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid direct chat signal wait requests", async () => {
+    const server = await createTestServer();
+    try {
+      await assert.rejects(
+        () =>
+          server.client.waitDirectChatSignal({
+            challengeText: "   ",
+            agentKind: "codex",
+            agentSessionId: "thread_a",
+            workspace: "/workspace/app",
+          }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /challengeText/.test(error.message),
+      );
+
+      const response = await fetch(
+        `http://${server.address.host}:${server.address.port}/direct-chat/signals/wait`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "null",
+        },
+      );
+      const payload = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.equal(payload.error.code, DAEMON_ERROR_CODES.INVALID_REQUEST);
+      assert.match(payload.error.message, /body/);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("binds a chat and exposes it through status", async () => {
     const server = await createTestServer();
     try {
