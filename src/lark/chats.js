@@ -1,8 +1,9 @@
 import { createDefaultLarkChannel, requireLarkAppConfig } from "./channel.js";
+import { DEFAULT_LARK_REQUEST_TIMEOUT_MS, withTimeout } from "./timeouts.js";
 
 const DEFAULT_CHAT_SEARCH_PAGE_SIZE = 20;
 export const MAX_CHAT_SEARCH_PAGE_SIZE = 100;
-const DEFAULT_CHAT_SEARCH_TIMEOUT_MS = 30_000;
+const DEFAULT_CHAT_SEARCH_TIMEOUT_MS = DEFAULT_LARK_REQUEST_TIMEOUT_MS;
 
 function normalizeQuery(value) {
   const query = String(value ?? "").trim();
@@ -37,20 +38,6 @@ function normalizeChatItem(item = {}) {
     memberCount: item.member_count ?? item.memberCount,
     ownerId: normalizeOptionalString(item.owner_id ?? item.ownerId),
   };
-}
-
-async function withTimeout(promise, timeoutMs, message) {
-  let timeout;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
 }
 
 function emptySearchNextSteps(query) {

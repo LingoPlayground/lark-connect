@@ -81,6 +81,42 @@ const TOOLS = [
     },
   },
   {
+    name: "lark_connect_get_chat_context",
+    description:
+      "Read recent messages from the Feishu chat bound to one Codex or Claude Code session. Defaults to the latest 10 messages, newest first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
+        limit: {
+          type: "number",
+          description: "Maximum number of recent chat messages to return. Defaults to 10.",
+        },
+        pageToken: { type: "string", description: "Optional pagination token from a prior context read." },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "lark_connect_get_chat_members",
+    description:
+      "Read human members and group bots from the Feishu chat bound to one Codex or Claude Code session. Bot results come from the Feishu members/bots API and include bot open_id values.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
+        pageSize: {
+          type: "number",
+          description: "Maximum number of human members to return. Defaults to 50.",
+        },
+        pageToken: { type: "string", description: "Optional pagination token from a prior member read." },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "lark_connect_poll_messages",
     description: "Immediately poll pending Feishu messages for one bound agent session.",
     inputSchema: {
@@ -122,16 +158,40 @@ const TOOLS = [
   {
     name: "lark_connect_send_message",
     description:
-      "Send a text message to the Feishu chat bound to one Codex or Claude Code session.",
+      "Send text to the bound Feishu chat. Supports replying to a message, mentioning humans or bots, and mention-only messages.",
     inputSchema: {
       type: "object",
       properties: {
         agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
-        text: { type: "string", description: "Plain text to send." },
+        text: { type: "string", description: "Plain text to send. Optional when mentions are provided." },
+        mentions: {
+          type: "array",
+          description:
+            "Optional Feishu users or bots to mention before the text. Supports mention-only messages.",
+          items: {
+            type: "object",
+            properties: {
+              openId: {
+                type: "string",
+                description: "Feishu open_id for a human user or bot.",
+              },
+              name: {
+                type: "string",
+                description: "Optional display name used in the mention tag.",
+              },
+              isBot: {
+                type: "boolean",
+                description: "Whether the mention target is another bot.",
+              },
+            },
+            required: ["openId"],
+            additionalProperties: false,
+          },
+        },
         replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
         replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
       },
-      required: ["agentSessionId", "text"],
+      required: ["agentSessionId"],
       additionalProperties: false,
     },
   },
@@ -307,6 +367,24 @@ async function handleToolCall(params, runtime) {
       );
     }
 
+    if (params?.name === "lark_connect_get_chat_context") {
+      return jsonResult(
+        await client.getChatContext(args.agentSessionId, {
+          limit: args.limit,
+          pageToken: args.pageToken,
+        }),
+      );
+    }
+
+    if (params?.name === "lark_connect_get_chat_members") {
+      return jsonResult(
+        await client.getChatMembers(args.agentSessionId, {
+          pageSize: args.pageSize,
+          pageToken: args.pageToken,
+        }),
+      );
+    }
+
     if (params?.name === "lark_connect_poll_messages") {
       return jsonResult(await client.pollMessages(args.agentSessionId));
     }
@@ -327,6 +405,7 @@ async function handleToolCall(params, runtime) {
       return jsonResult(
         await client.sendMessage(args.agentSessionId, {
           text: args.text,
+          mentions: args.mentions,
           replyToMessageId: args.replyToMessageId,
           replyInThread: args.replyInThread,
         }),

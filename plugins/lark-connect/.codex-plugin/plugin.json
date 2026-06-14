@@ -1,7 +1,7 @@
 {
   "name": "lark-connect",
-  "version": "0.1.5",
-  "description": "通过本地模型上下文协议服务，把 Codex 和 Claude Code 会话连接到飞书或 Lark 聊天，让智能体搜索群聊、发现单聊、绑定会话并长时间响应聊天消息。",
+  "version": "0.1.7",
+  "description": "通过本地模型上下文协议服务，把 Codex 和 Claude Code 会话连接到飞书或 Lark 聊天，让智能体搜索群聊、发现单聊、读取聊天上下文、查询成员和机器人、@ 协作者并长时间响应聊天消息。",
   "author": {
     "name": "LingoPlayground",
     "url": "https://github.com/LingoPlayground"
@@ -21,8 +21,8 @@
   "mcpServers": "./codex.mcp.json",
   "interface": {
     "displayName": "lark-connect",
-    "shortDescription": "搜索飞书群聊或用挑战码发现单聊，把 Codex 和 Claude Code 会话接入聊天消息响应流程",
-    "longDescription": "lark-connect 打包本地模型上下文协议服务和工作流技能，用于搜索机器人可见的飞书群聊，或通过 lark_connect_wait_direct_chat_signal 等待用户给机器人单聊发送挑战码来发现单聊 chatId，再把 Codex thread 或 Claude Code session 绑定到飞书聊天，发送文本、文件、图片和视频，确认已处理消息，并下载收到的资源。群聊只接收明确提及机器人的消息；已绑定单聊不要求提及。短等待使用 MCP wait；长时间响应交给 Codex thread automation 或 Claude Code background shell 定时唤醒。",
+    "shortDescription": "搜索飞书群聊或用挑战码发现单聊，把 Codex 和 Claude Code 会话接入聊天上下文和消息响应流程",
+    "longDescription": "lark-connect 打包本地模型上下文协议服务和工作流技能，用于搜索机器人可见的飞书群聊，或通过 lark_connect_wait_direct_chat_signal 等待用户给机器人单聊发送挑战码来发现单聊 chatId，再把 Codex thread 或 Claude Code session 绑定到飞书聊天。绑定后可以用 lark_connect_get_chat_context 读取近期聊天上下文，用 lark_connect_get_chat_members 查询人类成员和群内机器人，发送文本、文件、图片和视频，回复原消息，@ 人类同事或其他机器人，确认已处理消息，并下载收到的资源。群聊只接收明确提及机器人的消息；已绑定单聊不要求提及。短等待使用 MCP wait；长时间响应交给 Codex thread automation 或 Claude Code background shell 定时唤醒。",
     "developerName": "LingoPlayground",
     "category": "Productivity",
     "capabilities": [
@@ -32,9 +32,9 @@
     "websiteURL": "https://github.com/LingoPlayground/lark-connect",
     "defaultPrompt": [
       "帮我配置飞书机器人应用的 lark-connect。",
-      "搜索目标飞书群，把当前智能体会话绑定到聊天，并发送最新截图。",
+      "搜索目标飞书群，把当前智能体会话绑定到聊天，读取群聊上下文，并发送最新截图。",
       "用挑战码发现机器人单聊，把当前智能体会话绑定到这个单聊。",
-      "持续响应绑定聊天里的消息，确认收到后继续处理。"
+      "查询群成员和群内机器人，@ 相关协作者后持续响应绑定聊天里的消息。"
     ]
   }
 }

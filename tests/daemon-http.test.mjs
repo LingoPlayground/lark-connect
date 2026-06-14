@@ -583,6 +583,258 @@ describe("daemon http server", () => {
     }
   });
 
+  it("gets recent chat context for the bound agent session", async () => {
+    const observedContextRequests = [];
+    const server = await createTestServer({
+      chatContextClient: {
+        async getChatContext(input) {
+          observedContextRequests.push(input);
+          return {
+            chatId: input.chatId,
+            limit: input.limit,
+            messages: [
+              {
+                messageId: "om_latest",
+                larkMessageId: "om_latest",
+                chatId: input.chatId,
+                msgType: "text",
+                text: "最近的讨论",
+                mentions: [],
+              },
+            ],
+            hasMore: false,
+            pageToken: "",
+          };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      const result = await server.client.getChatContext("thread_a");
+
+      assert.deepEqual(observedContextRequests, [
+        {
+          chatId: "oc_target",
+          limit: 10,
+          pageToken: undefined,
+        },
+      ]);
+      assert.deepEqual(result.context.messages.map((message) => message.messageId), [
+        "om_latest",
+      ]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid chat context requests before calling Feishu", async () => {
+    const observedContextRequests = [];
+    const server = await createTestServer({
+      chatContextClient: {
+        async getChatContext(input) {
+          observedContextRequests.push(input);
+          return { chatId: input.chatId, limit: input.limit, messages: [] };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () => server.client.getChatContext("thread_a", { limit: 0 }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /limit/.test(error.message),
+      );
+      await assert.rejects(
+        () => server.client.getChatContext("thread_a", { pageToken: { bad: true } }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /pageToken/.test(error.message),
+      );
+      assert.deepEqual(observedContextRequests, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("does not get chat context when the agent session is not bound", async () => {
+    const observedContextRequests = [];
+    const server = await createTestServer({
+      chatContextClient: {
+        async getChatContext(input) {
+          observedContextRequests.push(input);
+          return { chatId: input.chatId, limit: input.limit, messages: [] };
+        },
+      },
+    });
+    try {
+      await assert.rejects(
+        () => server.client.getChatContext("thread_unbound"),
+        (error) =>
+          error?.code === "SESSION_NOT_BOUND" &&
+          error?.status === 404 &&
+          error?.details?.agentSessionId === "thread_unbound",
+      );
+      assert.deepEqual(observedContextRequests, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reports chat context failures", async () => {
+    const server = await createTestServer({
+      chatContextClient: {
+        async getChatContext() {
+          throw new Error("permission denied");
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () => server.client.getChatContext("thread_a"),
+        (error) =>
+          error?.code === "LARK_CHAT_CONTEXT_FAILED" &&
+          error?.status === 502 &&
+          /permission denied/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("gets chat members for the bound agent session", async () => {
+    const observedMemberRequests = [];
+    const server = await createTestServer({
+      chatMembersClient: {
+        async getChatMembers(input) {
+          observedMemberRequests.push(input);
+          return {
+            chatId: input.chatId,
+            pageSize: input.pageSize,
+            memberIdType: "open_id",
+            members: [{ memberId: "ou_human", memberType: "user", name: "产品经理" }],
+            bots: [
+              {
+                botId: "ou_bot",
+                openId: "ou_bot",
+                memberType: "bot",
+                source: "chat_member_bots_api",
+              },
+            ],
+            botCoverage: "direct",
+            botSources: ["chat_member_bots_api"],
+            notes: ["bot list is direct"],
+            hasMore: false,
+            pageToken: "",
+          };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      const result = await server.client.getChatMembers("thread_a", {
+        pageSize: 20,
+      });
+
+      assert.deepEqual(observedMemberRequests, [
+        {
+          chatId: "oc_target",
+          pageSize: 20,
+          pageToken: undefined,
+        },
+      ]);
+      assert.deepEqual(result.roster.members.map((member) => member.memberId), ["ou_human"]);
+      assert.deepEqual(result.roster.bots.map((bot) => bot.openId), ["ou_bot"]);
+      assert.equal(result.roster.botCoverage, "direct");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid chat member requests before calling Feishu", async () => {
+    const observedMemberRequests = [];
+    const server = await createTestServer({
+      chatMembersClient: {
+        async getChatMembers(input) {
+          observedMemberRequests.push(input);
+          return { chatId: input.chatId, members: [], bots: [] };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      for (const input of [
+        { pageSize: 0 },
+        { pageToken: { bad: true } },
+      ]) {
+        await assert.rejects(
+          () => server.client.getChatMembers("thread_a", input),
+          (error) =>
+            error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+            error?.status === 400,
+        );
+      }
+      assert.deepEqual(observedMemberRequests, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("does not get chat members when the agent session is not bound", async () => {
+    const observedMemberRequests = [];
+    const server = await createTestServer({
+      chatMembersClient: {
+        async getChatMembers(input) {
+          observedMemberRequests.push(input);
+          return { chatId: input.chatId, members: [], bots: [] };
+        },
+      },
+    });
+    try {
+      await assert.rejects(
+        () => server.client.getChatMembers("thread_unbound"),
+        (error) =>
+          error?.code === "SESSION_NOT_BOUND" &&
+          error?.status === 404 &&
+          error?.details?.agentSessionId === "thread_unbound",
+      );
+      assert.deepEqual(observedMemberRequests, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reports chat member failures", async () => {
+    const server = await createTestServer({
+      chatMembersClient: {
+        async getChatMembers() {
+          throw new Error("permission denied");
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () => server.client.getChatMembers("thread_a"),
+        (error) =>
+          error?.code === "LARK_CHAT_MEMBERS_FAILED" &&
+          error?.status === 502 &&
+          /permission denied/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   it("sends a text message to the chat bound to an agent session", async () => {
     const observedMessages = [];
     const server = await createTestServer({
@@ -601,6 +853,7 @@ describe("daemon http server", () => {
 
       const result = await server.client.sendMessage("thread_a", {
         text: "处理完成",
+        mentions: [{ openId: "ou_designer", name: "设计师" }],
         replyToMessageId: "om_original",
         replyInThread: true,
       });
@@ -609,6 +862,7 @@ describe("daemon http server", () => {
         {
           chatId: "oc_target",
           text: "处理完成",
+          mentions: [{ openId: "ou_designer", name: "设计师" }],
           replyToMessageId: "om_original",
           replyInThread: true,
         },
@@ -619,8 +873,51 @@ describe("daemon http server", () => {
         chatId: "oc_target",
         agentSessionId: "thread_a",
         text: "处理完成",
+        mentions: [{ openId: "ou_designer", name: "设计师" }],
         replyToMessageId: "om_original",
         replyInThread: true,
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("sends a mention-only text message to the chat bound to an agent session", async () => {
+    const observedMessages = [];
+    const server = await createTestServer({
+      messageClient: {
+        async sendTextMessage(input) {
+          observedMessages.push(input);
+          return {
+            ...input,
+            messageId: "om_mention_only",
+          };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      const result = await server.client.sendMessage("thread_a", {
+        mentions: [{ openId: "ou_pm", name: "产品经理" }],
+      });
+
+      assert.deepEqual(observedMessages, [
+        {
+          chatId: "oc_target",
+          text: "",
+          mentions: [{ openId: "ou_pm", name: "产品经理" }],
+          replyToMessageId: undefined,
+          replyInThread: undefined,
+        },
+      ]);
+      assert.deepEqual(result.message, {
+        id: "om_mention_only",
+        larkMessageId: "om_mention_only",
+        chatId: "oc_target",
+        agentSessionId: "thread_a",
+        text: "",
+        mentions: [{ openId: "ou_pm", name: "产品经理" }],
       });
     } finally {
       await server.close();
@@ -951,6 +1248,32 @@ describe("daemon http server", () => {
 
       for (const call of [
         () => server.client.sendMessage("thread_a", { text: "   " }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: "ou_pm",
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: [null],
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: [{}],
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: [{ openId: "ou_pm", isBot: "yes" }],
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: [{ openId: "ou_bad\" onclick=\"x" }],
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: Array.from({ length: 21 }, (_, index) => ({
+              openId: `ou_${index}`,
+            })),
+          }),
         () => server.client.sendFile("thread_a", { filePath: "" }),
         () => server.client.sendImage("thread_a", { imagePath: "" }),
         () =>

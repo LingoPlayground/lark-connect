@@ -39,6 +39,8 @@ describe("mcp daemon tools", () => {
         "lark_connect_search_chats",
         "lark_connect_wait_direct_chat_signal",
         "lark_connect_bind_session",
+        "lark_connect_get_chat_context",
+        "lark_connect_get_chat_members",
         "lark_connect_poll_messages",
         "lark_connect_wait_messages",
         "lark_connect_ack_message",
@@ -327,6 +329,309 @@ describe("mcp daemon tools", () => {
     });
   });
 
+  it("returns chat context failures as structured tool errors", async () => {
+    const sessionNotBound = await handleMcpMessage(
+      toolCall("lark_connect_get_chat_context", { agentSessionId: "thread_unbound" }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          getChatContext: async () => {
+            throw new DaemonHttpError(
+              DAEMON_ERROR_CODES.SESSION_NOT_BOUND,
+              "No Feishu chat is bound to agentSessionId thread_unbound. Call lark_connect_bind_session first.",
+              {
+                status: 404,
+                details: { agentSessionId: "thread_unbound" },
+              },
+            );
+          },
+        }),
+      },
+    );
+
+    assert.equal(sessionNotBound.result.isError, true);
+    assert.deepEqual(parseToolJson(sessionNotBound), {
+      code: DAEMON_ERROR_CODES.SESSION_NOT_BOUND,
+      message:
+        "No Feishu chat is bound to agentSessionId thread_unbound. Call lark_connect_bind_session first.",
+      details: { agentSessionId: "thread_unbound" },
+    });
+
+    const larkFailure = await handleMcpMessage(
+      toolCall("lark_connect_get_chat_context", { agentSessionId: "thread_a" }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          getChatContext: async () => {
+            throw new DaemonHttpError(
+              DAEMON_ERROR_CODES.LARK_CHAT_CONTEXT_FAILED,
+              "failed to get Feishu chat context for oc_target: permission denied",
+              {
+                status: 502,
+                details: { chatId: "oc_target" },
+              },
+            );
+          },
+        }),
+      },
+    );
+
+    assert.equal(larkFailure.result.isError, true);
+    assert.deepEqual(parseToolJson(larkFailure), {
+      code: DAEMON_ERROR_CODES.LARK_CHAT_CONTEXT_FAILED,
+      message: "failed to get Feishu chat context for oc_target: permission denied",
+      details: { chatId: "oc_target" },
+    });
+  });
+
+  it("returns chat member failures as structured tool errors", async () => {
+    const sessionNotBound = await handleMcpMessage(
+      toolCall("lark_connect_get_chat_members", { agentSessionId: "thread_unbound" }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          getChatMembers: async () => {
+            throw new DaemonHttpError(
+              DAEMON_ERROR_CODES.SESSION_NOT_BOUND,
+              "No Feishu chat is bound to agentSessionId thread_unbound. Call lark_connect_bind_session first.",
+              {
+                status: 404,
+                details: { agentSessionId: "thread_unbound" },
+              },
+            );
+          },
+        }),
+      },
+    );
+
+    assert.equal(sessionNotBound.result.isError, true);
+    assert.deepEqual(parseToolJson(sessionNotBound), {
+      code: DAEMON_ERROR_CODES.SESSION_NOT_BOUND,
+      message:
+        "No Feishu chat is bound to agentSessionId thread_unbound. Call lark_connect_bind_session first.",
+      details: { agentSessionId: "thread_unbound" },
+    });
+
+    const larkFailure = await handleMcpMessage(
+      toolCall("lark_connect_get_chat_members", { agentSessionId: "thread_a" }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          getChatMembers: async () => {
+            throw new DaemonHttpError(
+              DAEMON_ERROR_CODES.LARK_CHAT_MEMBERS_FAILED,
+              "failed to get Feishu chat members for oc_target: permission denied",
+              {
+                status: 502,
+                details: { chatId: "oc_target" },
+              },
+            );
+          },
+        }),
+      },
+    );
+
+    assert.equal(larkFailure.result.isError, true);
+    assert.deepEqual(parseToolJson(larkFailure), {
+      code: DAEMON_ERROR_CODES.LARK_CHAT_MEMBERS_FAILED,
+      message: "failed to get Feishu chat members for oc_target: permission denied",
+      details: { chatId: "oc_target" },
+    });
+  });
+
+  it("exposes strict schemas for chat context and mention sending", async () => {
+    const response = await handleMcpMessage({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    });
+    const tools = response.result.tools;
+
+    assert.deepEqual(toolByName(tools, "lark_connect_get_chat_context").inputSchema, {
+      type: "object",
+      properties: {
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of recent chat messages to return. Defaults to 10.",
+        },
+        pageToken: {
+          type: "string",
+          description: "Optional pagination token from a prior context read.",
+        },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    });
+    assert.equal(
+      toolByName(tools, "lark_connect_send_message").description,
+      "Send text to the bound Feishu chat. Supports replying to a message, mentioning humans or bots, and mention-only messages.",
+    );
+    assert.equal(
+      toolByName(tools, "lark_connect_get_chat_members").description,
+      "Read human members and group bots from the Feishu chat bound to one Codex or Claude Code session. Bot results come from the Feishu members/bots API and include bot open_id values.",
+    );
+    assert.deepEqual(toolByName(tools, "lark_connect_get_chat_members").inputSchema, {
+      type: "object",
+      properties: {
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        pageSize: {
+          type: "number",
+          description: "Maximum number of human members to return. Defaults to 50.",
+        },
+        pageToken: {
+          type: "string",
+          description: "Optional pagination token from a prior member read.",
+        },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    });
+    assert.deepEqual(toolByName(tools, "lark_connect_send_message").inputSchema, {
+      type: "object",
+      properties: {
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        text: {
+          type: "string",
+          description: "Plain text to send. Optional when mentions are provided.",
+        },
+        mentions: {
+          type: "array",
+          description:
+            "Optional Feishu users or bots to mention before the text. Supports mention-only messages.",
+          items: {
+            type: "object",
+            properties: {
+              openId: {
+                type: "string",
+                description: "Feishu open_id for a human user or bot.",
+              },
+              name: {
+                type: "string",
+                description: "Optional display name used in the mention tag.",
+              },
+              isBot: {
+                type: "boolean",
+                description: "Whether the mention target is another bot.",
+              },
+            },
+            required: ["openId"],
+            additionalProperties: false,
+          },
+        },
+        replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
+        replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    });
+  });
+
+  it("forwards chat context reads to the local daemon client", async () => {
+    let observedAgentSessionId;
+    let observedArgs;
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_get_chat_context", {
+        agentSessionId: "thread_a",
+        limit: 10,
+        pageToken: "next_page",
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          getChatContext: async (agentSessionId, args) => {
+            observedAgentSessionId = agentSessionId;
+            observedArgs = args;
+            return {
+              context: {
+                chatId: "oc_target",
+                limit: args.limit,
+                messages: [{ messageId: "om_latest", text: "最近的讨论" }],
+                hasMore: false,
+                pageToken: "",
+              },
+            };
+          },
+        }),
+      },
+    );
+
+    assert.equal(observedAgentSessionId, "thread_a");
+    assert.deepEqual(observedArgs, {
+      limit: 10,
+      pageToken: "next_page",
+    });
+    assert.deepEqual(parseToolJson(response), {
+      context: {
+        chatId: "oc_target",
+        limit: 10,
+        messages: [{ messageId: "om_latest", text: "最近的讨论" }],
+        hasMore: false,
+        pageToken: "",
+      },
+    });
+  });
+
+  it("forwards chat member reads to the local daemon client", async () => {
+    let observedAgentSessionId;
+    let observedArgs;
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_get_chat_members", {
+        agentSessionId: "thread_a",
+        pageSize: 20,
+        pageToken: "members_page",
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          getChatMembers: async (agentSessionId, args) => {
+            observedAgentSessionId = agentSessionId;
+            observedArgs = args;
+            return {
+              roster: {
+                chatId: "oc_target",
+                members: [{ memberId: "ou_human", memberType: "user" }],
+                bots: [
+                  {
+                    botId: "ou_bot",
+                    openId: "ou_bot",
+                    memberType: "bot",
+                    source: "chat_member_bots_api",
+                  },
+                ],
+                botCoverage: "direct",
+              },
+            };
+          },
+        }),
+      },
+    );
+
+    assert.equal(observedAgentSessionId, "thread_a");
+    assert.deepEqual(observedArgs, {
+      pageSize: 20,
+      pageToken: "members_page",
+    });
+    assert.deepEqual(parseToolJson(response), {
+      roster: {
+        chatId: "oc_target",
+        members: [{ memberId: "ou_human", memberType: "user" }],
+        bots: [
+          {
+            botId: "ou_bot",
+            openId: "ou_bot",
+            memberType: "bot",
+            source: "chat_member_bots_api",
+          },
+        ],
+        botCoverage: "direct",
+      },
+    });
+  });
+
   it("forwards text send calls to the local daemon client", async () => {
     let observedAgentSessionId;
     let observedArgs;
@@ -334,6 +639,7 @@ describe("mcp daemon tools", () => {
       toolCall("lark_connect_send_message", {
         agentSessionId: "thread_a",
         text: "处理完成",
+        mentions: [{ openId: "ou_designer", name: "设计师" }],
         replyToMessageId: "om_original",
         replyInThread: true,
       }),
@@ -359,6 +665,7 @@ describe("mcp daemon tools", () => {
     assert.equal(observedAgentSessionId, "thread_a");
     assert.deepEqual(observedArgs, {
       text: "处理完成",
+      mentions: [{ openId: "ou_designer", name: "设计师" }],
       replyToMessageId: "om_original",
       replyInThread: true,
     });
@@ -369,6 +676,7 @@ describe("mcp daemon tools", () => {
         chatId: "oc_target",
         agentSessionId: "thread_a",
         text: "处理完成",
+        mentions: [{ openId: "ou_designer", name: "设计师" }],
         replyToMessageId: "om_original",
         replyInThread: true,
       },

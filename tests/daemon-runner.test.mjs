@@ -158,10 +158,126 @@ describe("daemon runner", () => {
         {
           chatId: "oc_target",
           text: "处理完成",
+          mentions: undefined,
           replyToMessageId: undefined,
           replyInThread: undefined,
         },
       ]);
+    } finally {
+      await daemon.close();
+    }
+  });
+
+  it("wires an injected chat context client into context reads", async () => {
+    const channelRunner = createFakeChannelRunner();
+    const observedContextRequests = [];
+    const daemon = await startDaemon(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+        chatId: "oc_target",
+        daemonHost: "127.0.0.1",
+        daemonPort: 0,
+        daemonIdleTimeoutMs: 3_600_000,
+      },
+      {
+        channelRunner,
+        chatContextClient: {
+          async getChatContext(input) {
+            observedContextRequests.push(input);
+            return {
+              chatId: input.chatId,
+              limit: input.limit,
+              messages: [{ messageId: "om_latest", text: "最近的讨论" }],
+              hasMore: false,
+              pageToken: "",
+            };
+          },
+        },
+      },
+    );
+
+    const client = createDaemonHttpClient(daemon.address);
+    try {
+      daemon.runtime.bindSession({
+        chatId: "oc_target",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+      });
+
+      const result = await client.getChatContext("thread_a", { limit: 5 });
+
+      assert.deepEqual(observedContextRequests, [
+        {
+          chatId: "oc_target",
+          limit: 5,
+          pageToken: undefined,
+        },
+      ]);
+      assert.deepEqual(result.context.messages, [
+        { messageId: "om_latest", text: "最近的讨论" },
+      ]);
+    } finally {
+      await daemon.close();
+    }
+  });
+
+  it("wires an injected chat members client into member reads", async () => {
+    const channelRunner = createFakeChannelRunner();
+    const observedMemberRequests = [];
+    const daemon = await startDaemon(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+        chatId: "oc_target",
+        daemonHost: "127.0.0.1",
+        daemonPort: 0,
+        daemonIdleTimeoutMs: 3_600_000,
+      },
+      {
+        channelRunner,
+        chatMembersClient: {
+          async getChatMembers(input) {
+            observedMemberRequests.push(input);
+            return {
+              chatId: input.chatId,
+              members: [{ memberId: "ou_human", memberType: "user" }],
+              bots: [
+                {
+                  botId: "ou_bot",
+                  openId: "ou_bot",
+                  memberType: "bot",
+                  source: "chat_member_bots_api",
+                },
+              ],
+              botCoverage: "direct",
+            };
+          },
+        },
+      },
+    );
+
+    const client = createDaemonHttpClient(daemon.address);
+    try {
+      daemon.runtime.bindSession({
+        chatId: "oc_target",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+      });
+
+      const result = await client.getChatMembers("thread_a", { pageSize: 5 });
+
+      assert.deepEqual(observedMemberRequests, [
+        {
+          chatId: "oc_target",
+          pageSize: 5,
+          pageToken: undefined,
+        },
+      ]);
+      assert.equal(result.roster.members[0].memberId, "ou_human");
+      assert.equal(result.roster.bots[0].openId, "ou_bot");
     } finally {
       await daemon.close();
     }

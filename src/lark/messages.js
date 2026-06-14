@@ -2,16 +2,22 @@ import { createReadStream } from "node:fs";
 import { basename } from "node:path";
 
 import { createDefaultLarkChannel } from "./channel.js";
+import { normalizeOptionalMentions } from "./mentions.js";
 
 function requireMessageConfig(config) {
   if (!config.appId) throw new Error("FEISHU_APP_ID is required for messages");
   if (!config.appSecret) throw new Error("FEISHU_APP_SECRET is required for messages");
 }
 
-function normalizeText(text) {
-  const normalized = String(text ?? "").trim();
-  if (!normalized) throw new Error("text is required");
-  return normalized;
+function normalizeOptionalText(text) {
+  return String(text ?? "").trim();
+}
+
+function normalizeTextMessageInput(input) {
+  const text = normalizeOptionalText(input.text);
+  const mentions = normalizeOptionalMentions(input.mentions);
+  if (!text && !mentions) throw new Error("text or mentions is required");
+  return { text, mentions };
 }
 
 function normalizeFilePath(filePath) {
@@ -59,23 +65,23 @@ export async function createLarkMessageClient(config, options = {}) {
 
   return {
     async sendTextMessage(input) {
-      const text = normalizeText(input.text);
-      const result = await channel.send(
-        input.chatId,
-        { text },
-        {
-          replyTo: input.replyToMessageId,
-          replyInThread: input.replyInThread,
-        },
-      );
+      const { text, mentions } = normalizeTextMessageInput(input);
+      const sendOptions = {
+        replyTo: input.replyToMessageId,
+        replyInThread: input.replyInThread,
+      };
+      if (mentions) sendOptions.mentions = mentions;
+
+      const result = await channel.send(input.chatId, { text }, sendOptions);
 
       const message = {
         chatId: input.chatId,
         text,
         messageId: result.messageId,
-        replyToMessageId: input.replyToMessageId,
-        replyInThread: input.replyInThread,
       };
+      if (input.replyToMessageId !== undefined) message.replyToMessageId = input.replyToMessageId;
+      if (input.replyInThread !== undefined) message.replyInThread = input.replyInThread;
+      if (mentions) message.mentions = mentions;
       if (result.chunkIds) message.chunkIds = result.chunkIds;
       return message;
     },

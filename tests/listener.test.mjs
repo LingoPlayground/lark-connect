@@ -48,6 +48,14 @@ describe("listenOnce", () => {
       content: "收到",
       rawContentType: "text",
       mentionedBot: true,
+      raw: {
+        sender: {
+          sender_type: "app",
+          sender_id: {
+            open_id: "ou_sender",
+          },
+        },
+      },
       mentions: [{ key: "@_user_1", openId: "ou_bot", name: "bot", isBot: true }],
       resources: [],
       rootId: "om_root",
@@ -60,6 +68,7 @@ describe("listenOnce", () => {
     assert.equal(result.messageId, "om_1");
     assert.equal(result.chatId, "oc_target");
     assert.equal(result.mentionedBot, true);
+    assert.equal(result.senderType, "app");
     assert.equal(result.rootId, "om_root");
     assert.equal(result.threadId, "omt_thread");
     assert.equal(result.replyToMessageId, "om_parent");

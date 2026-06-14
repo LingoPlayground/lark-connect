@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "lark-connect",
-      "version": "0.1.5",
+      "version": "0.1.7",
       "source": {
         "source": "local",
         "path": "./plugins/lark-connect"
