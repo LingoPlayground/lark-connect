@@ -1,6 +1,10 @@
 import { createServer } from "node:http";
 
 import { DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT } from "../config.js";
+import {
+  DEFAULT_CHAT_CONTEXT_LIMIT,
+  MAX_CHAT_CONTEXT_LIMIT,
+} from "../lark/chat-context.js";
 import { MAX_CHAT_SEARCH_PAGE_SIZE } from "../lark/chats.js";
 import { DEFAULT_ACK_REACTION_EMOJI_TYPE } from "../lark/reactions.js";
 import { createDaemonRuntime } from "./runtime.js";
@@ -19,6 +23,7 @@ function statusForError(error) {
   if (error?.code === DAEMON_ERROR_CODES.LARK_REACTION_FAILED) return 502;
   if (error?.code === DAEMON_ERROR_CODES.LARK_SEND_FAILED) return 502;
   if (error?.code === DAEMON_ERROR_CODES.LARK_CHAT_SEARCH_FAILED) return 502;
+  if (error?.code === DAEMON_ERROR_CODES.LARK_CHAT_CONTEXT_FAILED) return 502;
   if (error?.code === DAEMON_ERROR_CODES.LARK_RESOURCE_DOWNLOAD_FAILED) return 502;
   return 500;
 }
@@ -93,6 +98,16 @@ function routeSessionMessages(pathname) {
 function routeSessionSendMessage(pathname) {
   const parts = pathname.split("/").filter(Boolean);
   if (parts[0] !== "sessions" || parts[2] !== "send-message" || parts.length !== 3) {
+    return undefined;
+  }
+  return {
+    agentSessionId: decodeURIComponent(parts[1]),
+  };
+}
+
+function routeSessionChatContext(pathname) {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "sessions" || parts[2] !== "chat-context" || parts.length !== 3) {
     return undefined;
   }
   return {
@@ -190,16 +205,6 @@ function requireBoundChat(runtime, agentSessionId) {
   return binding.chatId;
 }
 
-function requireText(value) {
-  const text = String(value ?? "").trim();
-  if (!text) {
-    const error = new Error("text is required");
-    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
-    throw error;
-  }
-  return text;
-}
-
 function requireFilePath(value) {
   const filePath = String(value ?? "").trim();
   if (!filePath) {
@@ -278,6 +283,66 @@ function normalizeOptionalChatSearchPageSize(value) {
   return pageSize;
 }
 
+function normalizeOptionalChatContextLimit(value) {
+  if (value === undefined) return DEFAULT_CHAT_CONTEXT_LIMIT;
+
+  const limit = Number(value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_CHAT_CONTEXT_LIMIT) {
+    const error = new Error(
+      `limit must be an integer between 1 and ${MAX_CHAT_CONTEXT_LIMIT}`,
+    );
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+
+  return limit;
+}
+
+function invalidRequest(message, details) {
+  const error = new Error(message);
+  error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+  if (details) error.details = details;
+  throw error;
+}
+
+function normalizeMentionTarget(target) {
+  if (!target || typeof target !== "object" || Array.isArray(target)) {
+    invalidRequest("mentions items must be objects");
+  }
+
+  const openId = String(target.openId ?? target.open_id ?? "").trim();
+  if (!openId) invalidRequest("mentions.openId is required");
+
+  const mention = { openId };
+  const name = String(target.name ?? "").trim();
+  if (name) mention.name = name;
+  if (target.isBot !== undefined) {
+    if (typeof target.isBot !== "boolean") invalidRequest("mentions.isBot must be a boolean");
+    mention.isBot = target.isBot;
+  }
+  return mention;
+}
+
+function normalizeOptionalMentions(value) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) invalidRequest("mentions must be an array");
+  const mentions = value.map(normalizeMentionTarget);
+  return mentions.length > 0 ? mentions : undefined;
+}
+
+function normalizeSendTextBody(body) {
+  const input = requireObjectBody(body);
+  const text = String(input.text ?? "").trim();
+  const mentions = normalizeOptionalMentions(input.mentions);
+  if (!text && !mentions) invalidRequest("text or mentions is required");
+  return {
+    text,
+    mentions,
+    replyToMessageId: input.replyToMessageId,
+    replyInThread: input.replyInThread,
+  };
+}
+
 function createReactionError(cause, message, emojiType) {
   const causeMessage = cause instanceof Error ? cause.message : String(cause);
   const error = new Error(
@@ -312,6 +377,18 @@ function createChatSearchError(cause, query) {
   error.cause = cause;
   error.details = {
     query,
+  };
+  return error;
+}
+
+function createChatContextError(cause, agentSessionId, chatId) {
+  const causeMessage = cause instanceof Error ? cause.message : String(cause);
+  const error = new Error(`failed to get Feishu chat context for ${chatId}: ${causeMessage}`);
+  error.code = DAEMON_ERROR_CODES.LARK_CHAT_CONTEXT_FAILED;
+  error.cause = cause;
+  error.details = {
+    agentSessionId,
+    chatId,
   };
   return error;
 }
@@ -359,11 +436,13 @@ async function sendTextMessage(messageClient, agentSessionId, chatId, body) {
   }
 
   try {
+    const input = normalizeSendTextBody(body);
     const sent = await messageClient.sendTextMessage({
       chatId,
-      text: requireText(body.text),
-      replyToMessageId: body.replyToMessageId,
-      replyInThread: body.replyInThread,
+      text: input.text,
+      mentions: input.mentions,
+      replyToMessageId: input.replyToMessageId,
+      replyInThread: input.replyInThread,
     });
     const message = {
       id: sent.messageId,
@@ -372,6 +451,7 @@ async function sendTextMessage(messageClient, agentSessionId, chatId, body) {
       agentSessionId,
       text: sent.text,
     };
+    if (sent.mentions !== undefined) message.mentions = sent.mentions;
     if (sent.replyToMessageId !== undefined) message.replyToMessageId = sent.replyToMessageId;
     if (sent.replyInThread !== undefined) message.replyInThread = sent.replyInThread;
     if (sent.chunkIds) message.chunkIds = sent.chunkIds;
@@ -379,6 +459,31 @@ async function sendTextMessage(messageClient, agentSessionId, chatId, body) {
   } catch (cause) {
     if (cause?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) throw cause;
     throw createSendError(cause, agentSessionId, chatId);
+  }
+}
+
+async function getChatContext(chatContextClient, agentSessionId, chatId, body) {
+  const input = requireObjectBody(body);
+  const limit = normalizeOptionalChatContextLimit(input.limit);
+  const pageToken = normalizeOptionalStringField(input.pageToken, "pageToken");
+
+  if (!chatContextClient?.getChatContext) {
+    throw createChatContextError(
+      new Error("chat context client is unavailable"),
+      agentSessionId,
+      chatId,
+    );
+  }
+
+  try {
+    return await chatContextClient.getChatContext({
+      chatId,
+      limit,
+      pageToken,
+    });
+  } catch (cause) {
+    if (cause?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) throw cause;
+    throw createChatContextError(cause, agentSessionId, chatId);
   }
 }
 
@@ -528,6 +633,7 @@ export function createDaemonHttpServer(options = {}) {
   const reactionClient = options.reactionClient;
   const messageClient = options.messageClient;
   const chatClient = options.chatClient;
+  const chatContextClient = options.chatContextClient;
   const resourceClient = options.resourceClient;
   const ackReactionEmojiType = options.ackReactionEmojiType ?? DEFAULT_ACK_REACTION_EMOJI_TYPE;
 
@@ -590,6 +696,20 @@ export function createDaemonHttpServer(options = {}) {
         sendJson(response, 200, {
           messages: runtime.pollMessages(messagesRoute.agentSessionId),
         });
+        return;
+      }
+
+      const chatContextRoute = routeSessionChatContext(pathname);
+      if (request.method === "POST" && chatContextRoute) {
+        const body = await readJsonBody(request);
+        const chatId = requireBoundChat(runtime, chatContextRoute.agentSessionId);
+        const context = await getChatContext(
+          chatContextClient,
+          chatContextRoute.agentSessionId,
+          chatId,
+          body,
+        );
+        sendJson(response, 200, { context });
         return;
       }
 

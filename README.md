@@ -4,12 +4,15 @@
 
 它解决的核心问题是：设计师、产品经理或其他协作者可以在群里明确提及机器人；本地 Codex thread（线程）或 Claude Code session（会话）收到这条消息后继续处理任务，把文本、截图、录屏或文件发回对应聊天，并在处理完成后给原消息添加确认反应。
 
+这个工具的背景不是“把聊天消息转成命令”这么窄，而是让个人 Agent 进入真实团队工作场景。它应该能看见团队最近讨论的上下文，和同事完成异步交流，也能 @ 其他同事的 Agent 一起协作。换句话说，lark-connect 同时支持 Agent 与同事的交流，以及 Agent 与其他同事的 Agent 交流。
+
 当前版本的设计边界：
 
 - 一个本地守护进程维护飞书长连接和本机内存状态。
 - 同一时间只允许一个飞书聊天绑定到一个智能体会话。
 - 群聊消息只有真实提及机器人时才会进入队列；已绑定单聊不要求提及机器人。
 - 群聊可以通过 `lark_connect_search_chats` 搜索；单聊可以让用户给机器人私聊发送挑战码，再用 `lark_connect_wait_direct_chat_signal` 发现 `chatId`。
+- 绑定后可以通过 `lark_connect_get_chat_context` 读取近期聊天上下文，默认最近 10 条消息。
 - 聊天 ID 不写入全局配置，只在 `lark_connect_bind_session` 里绑定。
 - 守护进程 1 小时没有飞书事件或本地调用后自动退出。
 
@@ -21,7 +24,7 @@
 
 - 本机有 Node.js 22 或更新版本。
 - 用户已经有一个飞书开放平台应用，并且机器人已经加入目标群，或用户可以打开机器人单聊发送确认挑战码。
-- 应用已经开通接收消息事件和后续需要的飞书权限。接收消息至少需要消息事件订阅；确认消息会使用 reaction（反应）接口，通常还需要 `im:message` 和 `im:message.reactions:write_only`。
+- 应用已经开通接收消息事件和后续需要的飞书权限。接收消息至少需要消息事件订阅；确认消息会使用 reaction（反应）接口，通常还需要 `im:message` 和 `im:message.reactions:write_only`；读取群聊上下文还需要应用具备获取群组历史消息的权限，并且机器人已经在目标群里。
 - 目标运行时已经安装：Codex、Claude Code，或两者都有。
 
 ### 安装插件
@@ -102,7 +105,8 @@ npx -y curiosea-lark-connect@latest daemon stop
 4. 拿到目标群或单聊 `chatId` 后，调用 `lark_connect_bind_session`。
 5. 传入 `chatId`、`agentKind`、`agentSessionId`、`workspace`。
 6. 如果目标聊天已经绑定到旧会话，只有在用户明确要求接管时才传 `replace: true`。
-7. 绑定成功后必须立即调用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`，让当前会话马上进入监听。
+7. 如果需要理解已有协作背景，调用 `lark_connect_get_chat_context` 读取最近消息；不传 `limit` 时默认最近 10 条。
+8. 绑定成功后必须立即调用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`，让当前会话马上进入监听。
 
 绑定后，常用工具是：
 
@@ -112,10 +116,11 @@ npx -y curiosea-lark-connect@latest daemon stop
 | `lark_connect_search_chats` | 搜索机器人可见的飞书群聊，返回候选 `chatId`。 |
 | `lark_connect_wait_direct_chat_signal` | 等待用户给机器人单聊发送指定挑战文本，返回单聊 `chatId` 和建议绑定参数。 |
 | `lark_connect_bind_session` | 把一个飞书聊天绑定到当前 Codex thread 或 Claude Code session。 |
+| `lark_connect_get_chat_context` | 读取当前绑定聊天的近期消息，默认最近 10 条，用于理解协作上下文。 |
 | `lark_connect_poll_messages` | 立即领取当前绑定聊天的待处理消息。 |
 | `lark_connect_wait_messages` | 限时等待当前绑定聊天的待处理消息。 |
 | `lark_connect_ack_message` | 确认一条消息已经处理完成，并给原始飞书消息添加 `OK` reaction（反应）。 |
-| `lark_connect_send_message` | 向当前绑定聊天发送文本，可选回复某条原消息。 |
+| `lark_connect_send_message` | 向当前绑定聊天发送文本，可选回复某条原消息，也可以 @ 人类同事或其他机器人。 |
 | `lark_connect_send_image` | 向当前绑定聊天发送本地图片。 |
 | `lark_connect_send_video` | 向当前绑定聊天发送本地视频和封面图。 |
 | `lark_connect_send_file` | 向当前绑定聊天发送本地文件。 |
@@ -135,6 +140,16 @@ npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 
 
 `agentSessionId` 必须和 `lark_connect_bind_session` 里传入的是同一个值。
 
+### 发送回复和 @
+
+`lark_connect_send_message` 支持三个协作参数：
+
+- `replyToMessageId`：回复某条飞书原始消息。
+- `replyInThread`：在飞书话题里回复。
+- `mentions`：@ 人类同事或其他机器人。每项至少传 `openId`，可选 `name` 和 `isBot`。只传 `mentions` 不传 `text` 时，会发送一条只有 @ 的提醒消息。
+
+如果要 @ 某个真实对象，优先从 `lark_connect_get_chat_context` 返回的 `sender` 或 `mentions` 字段里取标识，不要编造用户或机器人 ID。
+
 ## 工程说明
 
 ### 目录结构
@@ -142,7 +157,7 @@ npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 
 ```text
 src/cli.js                  命令行入口
 src/config.js               本地配置读写和运行时配置解析
-src/lark/                   飞书长连接、消息、reaction（反应）、资源下载和连通性检查
+src/lark/                   飞书长连接、消息、聊天上下文、reaction（反应）、资源下载和连通性检查
 src/daemon/                 本地守护进程、HTTP 接口和内存路由状态
 src/mcp/server.js           MCP 标准输入输出服务和工具定义
 plugins/lark-connect/       Codex 和 Claude Code 共用的插件载荷
@@ -168,9 +183,10 @@ flowchart LR
 
 1. `daemon start` 使用飞书 Node.js SDK（软件开发工具包）建立长连接。
 2. 守护进程接收已绑定聊天里的消息；群聊必须明确提及机器人，单聊不要求提及。
-3. 消息进入内存队列后，MCP 的 `poll` 或 `wait` 工具把消息交给绑定会话。
-4. 智能体处理任务后，通过发送工具把文本、图片、视频或文件发回对应聊天。
-5. 智能体调用 `ack` 后，守护进程给原始飞书消息添加 `OK` reaction（反应），并把本地消息状态标为已确认。
+3. 需要背景时，MCP 的 `lark_connect_get_chat_context` 会通过飞书历史消息接口读取当前绑定聊天的近期消息；这些消息不会进入待处理队列，也不需要 ack。
+4. 新消息进入内存队列后，MCP 的 `poll` 或 `wait` 工具把消息交给绑定会话。
+5. 智能体处理任务后，通过发送工具把文本、图片、视频或文件发回对应聊天，可以回复原消息，也可以 @ 人类同事或其他机器人。
+6. 智能体调用 `ack` 后，守护进程给原始飞书消息添加 `OK` reaction（反应），并把本地消息状态标为已确认。
 
 ### 配置和状态
 

@@ -81,6 +81,24 @@ const TOOLS = [
     },
   },
   {
+    name: "lark_connect_get_chat_context",
+    description:
+      "Read recent messages from the Feishu chat bound to one Codex or Claude Code session. Defaults to the latest 10 messages.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
+        limit: {
+          type: "number",
+          description: "Maximum number of recent chat messages to return. Defaults to 10.",
+        },
+        pageToken: { type: "string", description: "Optional pagination token from a prior context read." },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "lark_connect_poll_messages",
     description: "Immediately poll pending Feishu messages for one bound agent session.",
     inputSchema: {
@@ -127,11 +145,35 @@ const TOOLS = [
       type: "object",
       properties: {
         agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
-        text: { type: "string", description: "Plain text to send." },
+        text: { type: "string", description: "Plain text to send. Optional when mentions are provided." },
+        mentions: {
+          type: "array",
+          description:
+            "Optional Feishu users or bots to mention before the text. Supports mention-only messages.",
+          items: {
+            type: "object",
+            properties: {
+              openId: {
+                type: "string",
+                description: "Feishu open_id for a human user or bot.",
+              },
+              name: {
+                type: "string",
+                description: "Optional display name used in the mention tag.",
+              },
+              isBot: {
+                type: "boolean",
+                description: "Whether the mention target is another bot.",
+              },
+            },
+            required: ["openId"],
+            additionalProperties: false,
+          },
+        },
         replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
         replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
       },
-      required: ["agentSessionId", "text"],
+      required: ["agentSessionId"],
       additionalProperties: false,
     },
   },
@@ -307,6 +349,15 @@ async function handleToolCall(params, runtime) {
       );
     }
 
+    if (params?.name === "lark_connect_get_chat_context") {
+      return jsonResult(
+        await client.getChatContext(args.agentSessionId, {
+          limit: args.limit,
+          pageToken: args.pageToken,
+        }),
+      );
+    }
+
     if (params?.name === "lark_connect_poll_messages") {
       return jsonResult(await client.pollMessages(args.agentSessionId));
     }
@@ -327,6 +378,7 @@ async function handleToolCall(params, runtime) {
       return jsonResult(
         await client.sendMessage(args.agentSessionId, {
           text: args.text,
+          mentions: args.mentions,
           replyToMessageId: args.replyToMessageId,
           replyInThread: args.replyInThread,
         }),

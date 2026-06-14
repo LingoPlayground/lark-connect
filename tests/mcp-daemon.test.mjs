@@ -39,6 +39,7 @@ describe("mcp daemon tools", () => {
         "lark_connect_search_chats",
         "lark_connect_wait_direct_chat_signal",
         "lark_connect_bind_session",
+        "lark_connect_get_chat_context",
         "lark_connect_poll_messages",
         "lark_connect_wait_messages",
         "lark_connect_ack_message",
@@ -327,6 +328,120 @@ describe("mcp daemon tools", () => {
     });
   });
 
+  it("exposes strict schemas for chat context and mention sending", async () => {
+    const response = await handleMcpMessage({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    });
+    const tools = response.result.tools;
+
+    assert.deepEqual(toolByName(tools, "lark_connect_get_chat_context").inputSchema, {
+      type: "object",
+      properties: {
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of recent chat messages to return. Defaults to 10.",
+        },
+        pageToken: {
+          type: "string",
+          description: "Optional pagination token from a prior context read.",
+        },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    });
+    assert.deepEqual(toolByName(tools, "lark_connect_send_message").inputSchema, {
+      type: "object",
+      properties: {
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        text: {
+          type: "string",
+          description: "Plain text to send. Optional when mentions are provided.",
+        },
+        mentions: {
+          type: "array",
+          description:
+            "Optional Feishu users or bots to mention before the text. Supports mention-only messages.",
+          items: {
+            type: "object",
+            properties: {
+              openId: {
+                type: "string",
+                description: "Feishu open_id for a human user or bot.",
+              },
+              name: {
+                type: "string",
+                description: "Optional display name used in the mention tag.",
+              },
+              isBot: {
+                type: "boolean",
+                description: "Whether the mention target is another bot.",
+              },
+            },
+            required: ["openId"],
+            additionalProperties: false,
+          },
+        },
+        replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
+        replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    });
+  });
+
+  it("forwards chat context reads to the local daemon client", async () => {
+    let observedAgentSessionId;
+    let observedArgs;
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_get_chat_context", {
+        agentSessionId: "thread_a",
+        limit: 10,
+        pageToken: "next_page",
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          getChatContext: async (agentSessionId, args) => {
+            observedAgentSessionId = agentSessionId;
+            observedArgs = args;
+            return {
+              context: {
+                chatId: "oc_target",
+                limit: args.limit,
+                messages: [{ messageId: "om_latest", text: "最近的讨论" }],
+                hasMore: false,
+                pageToken: "",
+              },
+            };
+          },
+        }),
+      },
+    );
+
+    assert.equal(observedAgentSessionId, "thread_a");
+    assert.deepEqual(observedArgs, {
+      limit: 10,
+      pageToken: "next_page",
+    });
+    assert.deepEqual(parseToolJson(response), {
+      context: {
+        chatId: "oc_target",
+        limit: 10,
+        messages: [{ messageId: "om_latest", text: "最近的讨论" }],
+        hasMore: false,
+        pageToken: "",
+      },
+    });
+  });
+
   it("forwards text send calls to the local daemon client", async () => {
     let observedAgentSessionId;
     let observedArgs;
@@ -334,6 +449,7 @@ describe("mcp daemon tools", () => {
       toolCall("lark_connect_send_message", {
         agentSessionId: "thread_a",
         text: "处理完成",
+        mentions: [{ openId: "ou_designer", name: "设计师" }],
         replyToMessageId: "om_original",
         replyInThread: true,
       }),
@@ -359,6 +475,7 @@ describe("mcp daemon tools", () => {
     assert.equal(observedAgentSessionId, "thread_a");
     assert.deepEqual(observedArgs, {
       text: "处理完成",
+      mentions: [{ openId: "ou_designer", name: "设计师" }],
       replyToMessageId: "om_original",
       replyInThread: true,
     });
@@ -369,6 +486,7 @@ describe("mcp daemon tools", () => {
         chatId: "oc_target",
         agentSessionId: "thread_a",
         text: "处理完成",
+        mentions: [{ openId: "ou_designer", name: "设计师" }],
         replyToMessageId: "om_original",
         replyInThread: true,
       },

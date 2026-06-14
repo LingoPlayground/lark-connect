@@ -40,6 +40,17 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 当前 daemon 同一时间只允许一个绑定。只有当用户希望这个聊天停止绑定到旧会话时，才传入 `replace: true`。
 
+## 上下文
+
+开始处理协作任务前，先调用 `lark_connect_get_chat_context` 读取当前绑定聊天的近期消息；不传 `limit` 时默认最近 10 条。这个工具用于理解人类协作背景、消息引用关系、谁在讨论、以及是否需要回复或 @ 人类同事和其他机器人。
+
+最佳实践：
+
+- 刚绑定并进入一个已有聊天时，先读一次上下文，然后继续短等待。上下文读取不是监听，不能替代 `lark_connect_wait_messages` 或 `lark_connect_poll_messages`。
+- `wait` 或 `poll` 返回的单条消息缺少背景时，先读上下文再处理，避免只看孤立消息就行动。
+- 不要对上下文里的历史消息调用 `lark_connect_ack_message`；只有 `wait` 或 `poll` 投递给当前会话的消息才需要 ack。
+- 如果需要 @ 人类同事或其他机器人，优先从上下文的 `sender` 或 `mentions` 字段里取得真实 `openId`；不要编造用户或机器人标识。
+
 ## 发送
 
 按产物类型选择最窄的工具：
@@ -50,6 +61,8 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 - `lark_connect_send_file`：发送日志、归档和非媒体附件。
 
 回复具体消息时传入 `replyToMessageId`。只有飞书话题上下文重要时才使用 `replyInThread`。
+
+需要 @ 人类同事或其他机器人时，在 `lark_connect_send_message` 里传入 `mentions`，每项至少包含 `openId`，可选 `name` 和 `isBot`。如果只是想提醒某个对象，可以只传 `mentions` 不传 `text`。
 
 ## 短等待
 

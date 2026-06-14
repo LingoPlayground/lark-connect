@@ -8,10 +8,40 @@ function requireMessageConfig(config) {
   if (!config.appSecret) throw new Error("FEISHU_APP_SECRET is required for messages");
 }
 
-function normalizeText(text) {
-  const normalized = String(text ?? "").trim();
-  if (!normalized) throw new Error("text is required");
-  return normalized;
+function normalizeOptionalText(text) {
+  return String(text ?? "").trim();
+}
+
+function normalizeMentionTarget(target) {
+  if (!target || typeof target !== "object" || Array.isArray(target)) {
+    throw new Error("mentions items must be objects");
+  }
+
+  const openId = String(target.openId ?? target.open_id ?? "").trim();
+  if (!openId) throw new Error("mentions.openId is required");
+
+  const mention = { openId };
+  const name = String(target.name ?? "").trim();
+  if (name) mention.name = name;
+  if (target.isBot !== undefined) {
+    if (typeof target.isBot !== "boolean") throw new Error("mentions.isBot must be a boolean");
+    mention.isBot = target.isBot;
+  }
+  return mention;
+}
+
+function normalizeMentions(mentions) {
+  if (mentions === undefined) return undefined;
+  if (!Array.isArray(mentions)) throw new Error("mentions must be an array");
+  const normalized = mentions.map(normalizeMentionTarget);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeTextMessageInput(input) {
+  const text = normalizeOptionalText(input.text);
+  const mentions = normalizeMentions(input.mentions);
+  if (!text && !mentions) throw new Error("text or mentions is required");
+  return { text, mentions };
 }
 
 function normalizeFilePath(filePath) {
@@ -59,23 +89,23 @@ export async function createLarkMessageClient(config, options = {}) {
 
   return {
     async sendTextMessage(input) {
-      const text = normalizeText(input.text);
-      const result = await channel.send(
-        input.chatId,
-        { text },
-        {
-          replyTo: input.replyToMessageId,
-          replyInThread: input.replyInThread,
-        },
-      );
+      const { text, mentions } = normalizeTextMessageInput(input);
+      const sendOptions = {
+        replyTo: input.replyToMessageId,
+        replyInThread: input.replyInThread,
+      };
+      if (mentions) sendOptions.mentions = mentions;
+
+      const result = await channel.send(input.chatId, { text }, sendOptions);
 
       const message = {
         chatId: input.chatId,
         text,
         messageId: result.messageId,
-        replyToMessageId: input.replyToMessageId,
-        replyInThread: input.replyInThread,
       };
+      if (input.replyToMessageId !== undefined) message.replyToMessageId = input.replyToMessageId;
+      if (input.replyInThread !== undefined) message.replyInThread = input.replyInThread;
+      if (mentions) message.mentions = mentions;
       if (result.chunkIds) message.chunkIds = result.chunkIds;
       return message;
     },

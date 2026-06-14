@@ -158,9 +158,65 @@ describe("daemon runner", () => {
         {
           chatId: "oc_target",
           text: "处理完成",
+          mentions: undefined,
           replyToMessageId: undefined,
           replyInThread: undefined,
         },
+      ]);
+    } finally {
+      await daemon.close();
+    }
+  });
+
+  it("wires an injected chat context client into context reads", async () => {
+    const channelRunner = createFakeChannelRunner();
+    const observedContextRequests = [];
+    const daemon = await startDaemon(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+        chatId: "oc_target",
+        daemonHost: "127.0.0.1",
+        daemonPort: 0,
+        daemonIdleTimeoutMs: 3_600_000,
+      },
+      {
+        channelRunner,
+        chatContextClient: {
+          async getChatContext(input) {
+            observedContextRequests.push(input);
+            return {
+              chatId: input.chatId,
+              limit: input.limit,
+              messages: [{ messageId: "om_latest", text: "最近的讨论" }],
+              hasMore: false,
+              pageToken: "",
+            };
+          },
+        },
+      },
+    );
+
+    const client = createDaemonHttpClient(daemon.address);
+    try {
+      daemon.runtime.bindSession({
+        chatId: "oc_target",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+      });
+
+      const result = await client.getChatContext("thread_a", { limit: 5 });
+
+      assert.deepEqual(observedContextRequests, [
+        {
+          chatId: "oc_target",
+          limit: 5,
+          pageToken: undefined,
+        },
+      ]);
+      assert.deepEqual(result.context.messages, [
+        { messageId: "om_latest", text: "最近的讨论" },
       ]);
     } finally {
       await daemon.close();

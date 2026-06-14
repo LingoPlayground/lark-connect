@@ -583,6 +583,131 @@ describe("daemon http server", () => {
     }
   });
 
+  it("gets recent chat context for the bound agent session", async () => {
+    const observedContextRequests = [];
+    const server = await createTestServer({
+      chatContextClient: {
+        async getChatContext(input) {
+          observedContextRequests.push(input);
+          return {
+            chatId: input.chatId,
+            limit: input.limit,
+            messages: [
+              {
+                messageId: "om_latest",
+                larkMessageId: "om_latest",
+                chatId: input.chatId,
+                msgType: "text",
+                text: "最近的讨论",
+                mentions: [],
+              },
+            ],
+            hasMore: false,
+            pageToken: "",
+          };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      const result = await server.client.getChatContext("thread_a");
+
+      assert.deepEqual(observedContextRequests, [
+        {
+          chatId: "oc_target",
+          limit: 10,
+          pageToken: undefined,
+        },
+      ]);
+      assert.deepEqual(result.context.messages.map((message) => message.messageId), [
+        "om_latest",
+      ]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid chat context requests before calling Feishu", async () => {
+    const observedContextRequests = [];
+    const server = await createTestServer({
+      chatContextClient: {
+        async getChatContext(input) {
+          observedContextRequests.push(input);
+          return { chatId: input.chatId, limit: input.limit, messages: [] };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () => server.client.getChatContext("thread_a", { limit: 0 }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /limit/.test(error.message),
+      );
+      await assert.rejects(
+        () => server.client.getChatContext("thread_a", { pageToken: { bad: true } }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /pageToken/.test(error.message),
+      );
+      assert.deepEqual(observedContextRequests, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("does not get chat context when the agent session is not bound", async () => {
+    const observedContextRequests = [];
+    const server = await createTestServer({
+      chatContextClient: {
+        async getChatContext(input) {
+          observedContextRequests.push(input);
+          return { chatId: input.chatId, limit: input.limit, messages: [] };
+        },
+      },
+    });
+    try {
+      await assert.rejects(
+        () => server.client.getChatContext("thread_unbound"),
+        (error) =>
+          error?.code === "SESSION_NOT_BOUND" &&
+          error?.status === 404 &&
+          error?.details?.agentSessionId === "thread_unbound",
+      );
+      assert.deepEqual(observedContextRequests, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reports chat context failures", async () => {
+    const server = await createTestServer({
+      chatContextClient: {
+        async getChatContext() {
+          throw new Error("permission denied");
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () => server.client.getChatContext("thread_a"),
+        (error) =>
+          error?.code === "LARK_CHAT_CONTEXT_FAILED" &&
+          error?.status === 502 &&
+          /permission denied/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   it("sends a text message to the chat bound to an agent session", async () => {
     const observedMessages = [];
     const server = await createTestServer({
@@ -601,6 +726,7 @@ describe("daemon http server", () => {
 
       const result = await server.client.sendMessage("thread_a", {
         text: "处理完成",
+        mentions: [{ openId: "ou_designer", name: "设计师" }],
         replyToMessageId: "om_original",
         replyInThread: true,
       });
@@ -609,6 +735,7 @@ describe("daemon http server", () => {
         {
           chatId: "oc_target",
           text: "处理完成",
+          mentions: [{ openId: "ou_designer", name: "设计师" }],
           replyToMessageId: "om_original",
           replyInThread: true,
         },
@@ -619,6 +746,7 @@ describe("daemon http server", () => {
         chatId: "oc_target",
         agentSessionId: "thread_a",
         text: "处理完成",
+        mentions: [{ openId: "ou_designer", name: "设计师" }],
         replyToMessageId: "om_original",
         replyInThread: true,
       });
