@@ -11,7 +11,7 @@ async function readJsonResponse(response, context) {
   try {
     payload = await response.json();
   } catch (error) {
-    throw new Error(`${context} returned a non-JSON response`);
+    throw new Error(`${context} returned a non-JSON response`, { cause: error });
   }
 
   if (!response.ok) {

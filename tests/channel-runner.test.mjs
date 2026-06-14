@@ -107,4 +107,36 @@ describe("lark channel runner", () => {
 
     await runner.stop();
   });
+
+  it("shares one channel connection across concurrent start calls", async () => {
+    const channel = createFakeChannel();
+    const runtime = createDaemonRuntime();
+    let factoryCalls = 0;
+    let connectCalls = 0;
+    const originalConnect = channel.connect;
+    channel.connect = async function connect() {
+      connectCalls += 1;
+      await Promise.resolve();
+      return originalConnect.call(this);
+    };
+
+    const runner = createLarkChannelRunner(
+      { appId: "cli_test", appSecret: "secret", chatId: "" },
+      {
+        runtime,
+        channelFactory: () => {
+          factoryCalls += 1;
+          return channel;
+        },
+      },
+    );
+
+    const results = await Promise.all([runner.start(), runner.start()]);
+
+    assert.deepEqual(results, [{ state: "connected" }, { state: "connected" }]);
+    assert.equal(factoryCalls, 1);
+    assert.equal(connectCalls, 1);
+
+    await runner.stop();
+  });
 });

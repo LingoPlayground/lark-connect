@@ -95,6 +95,31 @@ describe("runLiveDoctor", () => {
     );
   });
 
+  it("preserves the original response parsing error when live checks receive non-JSON", async () => {
+    const parseError = new SyntaxError("unexpected token");
+
+    await assert.rejects(
+      () =>
+        runLiveDoctor(
+          { appId: "cli_test", appSecret: "secret", chatId: "", appBaseInfoUrl: "" },
+          {
+            fetchImpl: async () => ({
+              ok: true,
+              status: 200,
+              async json() {
+                throw parseError;
+              },
+            }),
+          },
+        ),
+      (error) => {
+        assert.match(error.message, /tenant_access_token returned a non-JSON response/);
+        assert.equal(error.cause, parseError);
+        return true;
+      },
+    );
+  });
+
   it("checks app credentials and bot identity without requiring a chat id", async () => {
     const fetchImpl = createFetchStub([
       {
