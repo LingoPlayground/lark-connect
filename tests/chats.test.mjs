@@ -186,10 +186,53 @@ describe("lark chats", () => {
       },
     );
 
-    await assert.rejects(
-      () => client.searchChats({ query: "测试群", pageSize: 0 }),
-      /pageSize/,
+    for (const pageSize of [0, 101, 1.5]) {
+      await assert.rejects(
+        () => client.searchChats({ query: "测试群", pageSize }),
+        /pageSize/,
+      );
+    }
+  });
+
+  it("accepts the maximum chat search page size", async () => {
+    const observedCalls = [];
+    const client = await createLarkChatClient(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+      },
+      {
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {
+                chat: {
+                  async search(payload) {
+                    observedCalls.push(payload);
+                    return {
+                      data: {
+                        items: [],
+                      },
+                    };
+                  },
+                },
+              },
+            },
+          },
+        }),
+      },
     );
+
+    await client.searchChats({ query: "测试群", pageSize: 100 });
+
+    assert.deepEqual(observedCalls, [
+      {
+        params: {
+          query: "测试群",
+          page_size: 100,
+        },
+      },
+    ]);
   });
 
   it("times out chat search calls", async () => {

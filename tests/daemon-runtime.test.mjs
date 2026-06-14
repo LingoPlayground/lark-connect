@@ -102,6 +102,27 @@ describe("daemon runtime bindings", () => {
     assert.deepEqual(runtime.snapshot().bindings.map((item) => item.agentSessionId), ["thread_a"]);
   });
 
+  it("rejects non-boolean replace values without replacing the active binding", () => {
+    const { runtime } = createTestRuntime();
+    runtime.bindSession(binding());
+
+    assert.throws(
+      () =>
+        runtime.bindSession(
+          binding({
+            chatId: "oc_other",
+            agentSessionId: "thread_b",
+            replace: "false",
+          }),
+        ),
+      (error) =>
+        error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+        error?.details?.field === "replace",
+    );
+
+    assert.deepEqual(runtime.snapshot().bindings.map((item) => item.chatId), ["oc_target"]);
+  });
+
   it("replaces an existing binding and drops the old session queue", () => {
     const { runtime } = createTestRuntime();
     runtime.bindSession(binding());
@@ -127,6 +148,44 @@ describe("daemon runtime bindings", () => {
     assert.deepEqual(
       runtime.pollMessages("thread_b").map((message) => message.larkMessageId),
       ["om_after_replace"],
+    );
+  });
+
+  it("clears pending message and direct-signal waits when replacing a binding", async () => {
+    const { runtime } = createTestRuntime();
+    runtime.bindSession(binding());
+
+    const pendingMessages = runtime.waitForMessages("thread_a", { timeoutMs: 1_000 });
+    const pendingSignal = runtime.waitForDirectChatSignal({
+      challengeText: "lark-connect bind REPLACED",
+      agentKind: "codex",
+      agentSessionId: "thread_a",
+      workspace: "/workspace/app",
+      timeoutMs: 1_000,
+    });
+
+    runtime.bindSession(binding({ chatId: "oc_other", replace: true }));
+    runtime.receiveLarkMessage(
+      larkMessage({
+        messageId: "om_after_replace_waiter",
+        chatId: "oc_other",
+      }),
+    );
+    runtime.receiveLarkMessage(
+      larkMessage({
+        messageId: "om_after_replace_signal",
+        chatId: "oc_dm",
+        chatType: "p2p",
+        content: "lark-connect bind REPLACED",
+        mentionedBot: false,
+      }),
+    );
+
+    assert.deepEqual(await pendingMessages, []);
+    assert.equal(await pendingSignal, null);
+    assert.deepEqual(
+      runtime.pollMessages("thread_a").map((message) => message.larkMessageId),
+      ["om_after_replace_waiter"],
     );
   });
 
@@ -355,7 +414,7 @@ describe("daemon runtime direct chat signals", () => {
           mentionedBot: false,
         }),
       ),
-      { accepted: false, reason: "unrouted" },
+      { accepted: false, reason: "direct_chat_signal_buffered" },
     );
 
     const received = runtime.receiveLarkMessage(
@@ -399,7 +458,7 @@ describe("daemon runtime direct chat signals", () => {
           mentionedBot: false,
         }),
       ),
-      { accepted: false, reason: "unrouted" },
+      { accepted: false, reason: "direct_chat_signal_buffered" },
     );
 
     const signal = await runtime.waitForDirectChatSignal({
@@ -413,6 +472,164 @@ describe("daemon runtime direct chat signals", () => {
     assert.equal(signal.chatId, "oc_dm");
     assert.equal(signal.bindingInput.agentKind, "claude-code");
     assert.equal(signal.bindingInput.agentSessionId, "session_a");
+  });
+
+  it("deduplicates buffered direct chat signals by lark message id", async () => {
+    const { runtime } = createTestRuntime();
+    const payload = larkMessage({
+      messageId: "om_duplicate_signal",
+      chatId: "oc_dm",
+      chatType: "p2p",
+      content: "lark-connect bind ONCE",
+      mentionedBot: false,
+    });
+
+    assert.deepEqual(runtime.receiveLarkMessage(payload), {
+      accepted: false,
+      reason: "direct_chat_signal_buffered",
+    });
+    assert.deepEqual(runtime.receiveLarkMessage(payload), {
+      accepted: false,
+      reason: "duplicate",
+    });
+
+    assert.equal(
+      (await runtime.waitForDirectChatSignal({
+        challengeText: "lark-connect bind ONCE",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 0,
+      })).messageId,
+      "om_duplicate_signal",
+    );
+    assert.equal(
+      await runtime.waitForDirectChatSignal({
+        challengeText: "lark-connect bind ONCE",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 0,
+      }),
+      null,
+    );
+  });
+
+  it("expires stale buffered direct chat signals before matching", async () => {
+    const harness = createTestRuntime();
+    const { runtime } = harness;
+    runtime.receiveLarkMessage(
+      larkMessage({
+        messageId: "om_stale_signal",
+        chatId: "oc_dm",
+        chatType: "p2p",
+        content: "lark-connect bind STALE",
+        mentionedBot: false,
+      }),
+    );
+
+    harness.advance(300_001);
+
+    assert.equal(
+      await runtime.waitForDirectChatSignal({
+        challengeText: "lark-connect bind STALE",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 0,
+      }),
+      null,
+    );
+  });
+
+  it("evicts the oldest buffered direct chat signals when the buffer is full", async () => {
+    const { runtime } = createTestRuntime();
+
+    for (let index = 0; index < 51; index += 1) {
+      runtime.receiveLarkMessage(
+        larkMessage({
+          messageId: `om_buffer_${index}`,
+          chatId: `oc_dm_${index}`,
+          chatType: "p2p",
+          content: `lark-connect bind ${index}`,
+          mentionedBot: false,
+        }),
+      );
+    }
+
+    assert.equal(
+      await runtime.waitForDirectChatSignal({
+        challengeText: "lark-connect bind 0",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 0,
+      }),
+      null,
+    );
+    assert.equal(
+      (await runtime.waitForDirectChatSignal({
+        challengeText: "lark-connect bind 50",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 0,
+      })).chatId,
+      "oc_dm_50",
+    );
+  });
+
+  it("removes direct chat signal waiters after nonzero timeout", async () => {
+    const { runtime } = createTestRuntime();
+    assert.equal(
+      await runtime.waitForDirectChatSignal({
+        challengeText: "lark-connect bind TIMEOUT",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 1,
+      }),
+      null,
+    );
+
+    runtime.receiveLarkMessage(
+      larkMessage({
+        messageId: "om_after_timeout",
+        chatId: "oc_dm",
+        chatType: "p2p",
+        content: "lark-connect bind TIMEOUT",
+        mentionedBot: false,
+      }),
+    );
+
+    assert.equal(
+      (await runtime.waitForDirectChatSignal({
+        challengeText: "lark-connect bind TIMEOUT",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 0,
+      })).messageId,
+      "om_after_timeout",
+    );
+  });
+
+  it("rejects direct chat signal waits that exceed the Node timer range", () => {
+    const { runtime } = createTestRuntime();
+
+    assert.throws(
+      () =>
+        runtime.waitForDirectChatSignal({
+          challengeText: "lark-connect bind HUGE",
+          agentKind: "codex",
+          agentSessionId: "thread_a",
+          workspace: "/workspace/app",
+          timeoutMs: 2_147_483_648,
+        }),
+      (error) =>
+        error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+        error?.details?.field === "timeoutMs",
+    );
   });
 
   it("does not consume bound p2p messages as direct chat discovery signals", async () => {

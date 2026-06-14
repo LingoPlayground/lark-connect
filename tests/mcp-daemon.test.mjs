@@ -20,6 +20,10 @@ function parseToolJson(response) {
   return JSON.parse(response.result.content[0].text);
 }
 
+function toolByName(tools, name) {
+  return tools.find((tool) => tool.name === name);
+}
+
 describe("mcp daemon tools", () => {
   it("exposes daemon binding and message tools", async () => {
     const response = await handleMcpMessage({
@@ -45,6 +49,53 @@ describe("mcp daemon tools", () => {
         "lark_connect_download_resource",
       ],
     );
+  });
+
+  it("exposes strict schemas for chat discovery tools", async () => {
+    const response = await handleMcpMessage({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    });
+    const tools = response.result.tools;
+
+    assert.deepEqual(toolByName(tools, "lark_connect_search_chats").inputSchema, {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Group chat name keyword to search." },
+        pageSize: { type: "number", description: "Maximum number of chats to return." },
+        pageToken: { type: "string", description: "Optional pagination token from a prior search." },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    });
+    assert.deepEqual(toolByName(tools, "lark_connect_wait_direct_chat_signal").inputSchema, {
+      type: "object",
+      properties: {
+        challengeText: {
+          type: "string",
+          description: "Exact text the user must send to the bot direct chat.",
+        },
+        agentKind: {
+          type: "string",
+          description: "Agent runtime, for example codex or claude-code.",
+        },
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        workspace: {
+          type: "string",
+          description: "Absolute workspace path for this agent session.",
+        },
+        timeoutMs: {
+          type: "number",
+          description: "Maximum wait time in milliseconds.",
+        },
+      },
+      required: ["challengeText", "agentKind", "agentSessionId", "workspace"],
+      additionalProperties: false,
+    });
   });
 
   it("rejects removed setup_url without creating a daemon client", async () => {

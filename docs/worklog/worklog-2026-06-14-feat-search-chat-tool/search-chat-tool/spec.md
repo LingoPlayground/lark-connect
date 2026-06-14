@@ -10,7 +10,7 @@
 
 ## Findings (调研发现)
 
-- [README.md](../../../README.md) 当前安装和运行说明要求绑定时传入 `chatId`，但没有提供获取群聊 ID 的工具。
+- [README.md](../../../../README.md) 当前安装和运行说明要求绑定时传入 `chatId`，但没有提供获取群聊 ID 的工具。
 - 变更前的主响应技能要求用户提供 `chatId`，并且技能名偏“群消息响应”，不适合同时覆盖配置、搜索、绑定和单聊。
 - 飞书官方文档 `im.v1.chat.search` 是 `GET /open-apis/im/v1/chats/search`，用于搜索用户或机器人可见的群列表；官方描述强调它搜索群聊，不是私聊发现接口。
 - `@larksuiteoapi/node-sdk` 已暴露 `client.im.v1.chat.search`，注释同样说明它搜索对用户或机器人可见的群列表。

@@ -96,7 +96,7 @@ npx -y curiosea-lark-connect@latest daemon stop
 
 1. 如果目标是群聊且用户没有提供 `chatId`，先调用 `lark_connect_search_chats`，用群名或关键词搜索机器人可见群聊。
 2. 如果搜索不到目标群，提示用户确认群名；如果群不存在，请用户创建群；如果群已存在，请把当前应用机器人拉入群后重试。
-3. 如果目标是单聊且用户没有提供 `chatId`，生成一段唯一挑战文本，先把这段文本展示给用户，请用户在机器人单聊里原样发送；然后调用 `lark_connect_wait_direct_chat_signal` 等待这条私聊消息。
+3. 如果目标是单聊且用户没有提供 `chatId`，生成一段唯一挑战文本，先把这段文本展示给用户，请用户在机器人单聊里原样发送；然后调用 `lark_connect_wait_direct_chat_signal`，传入 `challengeText`、`agentKind`、`agentSessionId`、`workspace` 和 `timeoutMs`。如果返回 `signal: null`，说明这次等待没有收到匹配私聊消息；请用户确认发给了当前机器人且文本完全一致，再用新的挑战文本重试。
 4. 拿到目标群或单聊 `chatId` 后，调用 `lark_connect_bind_session`。
 5. 传入 `chatId`、`agentKind`、`agentSessionId`、`workspace`。
 6. 如果目标聊天已经绑定到旧会话，只有在用户明确要求接管时才传 `replace: true`。
@@ -175,6 +175,7 @@ flowchart LR
 - `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` 仍可作为运行时覆盖，但正式安装优先使用 `setup` 写入的本地配置。
 - `LARK_CONNECT_DAEMON_PORT` 可以覆盖本地守护进程端口，默认是 `51745`。
 - 绑定、消息队列和去重状态都只在守护进程内存里保存，进程重启后丢失；搜索结果只随单次请求返回。
+- 未绑定单聊挑战消息只在守护进程内存里短暂保留，最多 5 分钟或 50 条；替换绑定会清空旧等待者和这部分缓冲。
 - 当前不持久化 `thread_id` 或 `root_id`，它们只作为飞书消息元数据保留。
 
 ### 插件载荷

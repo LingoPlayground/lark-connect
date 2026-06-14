@@ -21,6 +21,8 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 如果目标是单聊且用户没有提供 `chatId`，不要要求用户手动查找 `chatId`。生成一段唯一挑战文本，例如 `lark-connect bind 8F2K`。先把这段文本展示给用户，请用户打开当前机器人单聊并原样发送；然后调用 `lark_connect_wait_direct_chat_signal`，传入同一段 `challengeText`、`agentKind`、`agentSessionId`、`workspace` 和 `timeoutMs: 60000`。工具返回 `signal.bindingInput` 后，再用其中的 `chatId` 调用 `lark_connect_bind_session`。
 
+如果 `lark_connect_wait_direct_chat_signal` 返回 `signal: null`，说明 1 分钟内没有收到完全匹配的机器人单聊消息。不要绑定猜测出来的 `chatId`；请用户确认打开的是当前飞书应用的机器人单聊，并确认发送文本和挑战文本完全一致，然后生成新的唯一挑战文本重试。
+
 `lark_connect_search_chats` 搜索的是机器人可见群聊，不用于发现用户和机器人的单聊。`lark_connect_wait_direct_chat_signal` 只负责发现单聊，不会自动绑定。
 
 ## 绑定
@@ -76,6 +78,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 ## 错误处理
 
 - 如果搜索不到目标群，提示用户创建群或把机器人拉入群后再重试。
+- 如果单聊挑战等待超时，提示用户确认机器人单聊和挑战文本，再用新的挑战文本重试。
 - 如果轮询或等待返回 `SESSION_NOT_BOUND`，先绑定会话再重试。
 - 如果返回 `DAEMON_NOT_RUNNING`，先启动守护进程再重试。
 - 如果发送或下载失败，向聊天或当前对话说明失败原因，不要静默吞掉。

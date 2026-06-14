@@ -275,21 +275,64 @@ describe("daemon http server", () => {
   it("rejects invalid direct chat signal wait requests", async () => {
     const server = await createTestServer();
     try {
-      await assert.rejects(
-        () =>
-          server.client.waitDirectChatSignal({
+      for (const [field, input] of [
+        [
+          "challengeText",
+          {
             challengeText: "   ",
             agentKind: "codex",
             agentSessionId: "thread_a",
             workspace: "/workspace/app",
-          }),
-        (error) =>
-          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
-          error?.status === 400 &&
-          /challengeText/.test(error.message),
-      );
+          },
+        ],
+        [
+          "agentKind",
+          {
+            challengeText: "lark-connect bind 8F2K",
+            agentKind: "   ",
+            agentSessionId: "thread_a",
+            workspace: "/workspace/app",
+          },
+        ],
+        [
+          "agentSessionId",
+          {
+            challengeText: "lark-connect bind 8F2K",
+            agentKind: "codex",
+            agentSessionId: "   ",
+            workspace: "/workspace/app",
+          },
+        ],
+        [
+          "workspace",
+          {
+            challengeText: "lark-connect bind 8F2K",
+            agentKind: "codex",
+            agentSessionId: "thread_a",
+            workspace: "   ",
+          },
+        ],
+        [
+          "timeoutMs",
+          {
+            challengeText: "lark-connect bind 8F2K",
+            agentKind: "codex",
+            agentSessionId: "thread_a",
+            workspace: "/workspace/app",
+            timeoutMs: 2_147_483_648,
+          },
+        ],
+      ]) {
+        await assert.rejects(
+          () => server.client.waitDirectChatSignal(input),
+          (error) =>
+            error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+            error?.status === 400 &&
+            error?.details?.field === field,
+        );
+      }
 
-      const response = await fetch(
+      const nullResponse = await fetch(
         `http://${server.address.host}:${server.address.port}/direct-chat/signals/wait`,
         {
           method: "POST",
@@ -297,11 +340,51 @@ describe("daemon http server", () => {
           body: "null",
         },
       );
-      const payload = await response.json();
+      const nullPayload = await nullResponse.json();
 
-      assert.equal(response.status, 400);
-      assert.equal(payload.error.code, DAEMON_ERROR_CODES.INVALID_REQUEST);
-      assert.match(payload.error.message, /body/);
+      assert.equal(nullResponse.status, 400);
+      assert.equal(nullPayload.error.code, DAEMON_ERROR_CODES.INVALID_REQUEST);
+      assert.match(nullPayload.error.message, /body/);
+
+      const arrayResponse = await fetch(
+        `http://${server.address.host}:${server.address.port}/direct-chat/signals/wait`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "[]",
+        },
+      );
+      const arrayPayload = await arrayResponse.json();
+
+      assert.equal(arrayResponse.status, 400);
+      assert.equal(arrayPayload.error.code, DAEMON_ERROR_CODES.INVALID_REQUEST);
+      assert.match(arrayPayload.error.message, /body/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects non-boolean binding replace values through the local protocol", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () =>
+          server.client.bindSession(
+            binding({
+              chatId: "oc_other",
+              replace: "false",
+            }),
+          ),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          error?.details?.field === "replace",
+      );
+
+      const status = await server.client.status();
+      assert.deepEqual(status.bindings.map((item) => item.chatId), ["oc_target"]);
     } finally {
       await server.close();
     }
