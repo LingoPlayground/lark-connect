@@ -4,8 +4,31 @@ import { dirname, join } from "node:path";
 
 const DEFAULT_LOG_TAIL = 100;
 
-export function getDaemonLogFilePath() {
-  return join(homedir(), ".local", "state", "curiosea-lark-connect", "daemon.jsonl");
+export function getDaemonLogDir() {
+  return join(homedir(), ".local", "state", "curiosea-lark-connect");
+}
+
+function resolveLogDir(options = {}) {
+  return options.logDir ?? getDaemonLogDir();
+}
+
+function sanitizeLogFileName(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "unknown";
+}
+
+export function getDaemonLogFilePath(options = {}) {
+  return join(resolveLogDir(options), "daemon.jsonl");
+}
+
+export function getSessionLogFilePath(agentSessionId, options = {}) {
+  return join(
+    resolveLogDir(options),
+    "sessions",
+    `${sanitizeLogFileName(agentSessionId)}.jsonl`,
+  );
 }
 
 export function createNoopLogger() {
@@ -15,13 +38,20 @@ export function createNoopLogger() {
 }
 
 export function createJsonlLogger(options = {}) {
-  const filePath = options.filePath ?? getDaemonLogFilePath();
+  const explicitFilePath = options.filePath;
+  const logDir = options.logDir;
   const now = options.now ?? (() => Date.now());
   const pid = options.pid ?? process.pid;
 
+  function resolveFilePath(details = {}) {
+    if (explicitFilePath) return explicitFilePath;
+    if (details.agentSessionId) return getSessionLogFilePath(details.agentSessionId, { logDir });
+    return getDaemonLogFilePath({ logDir });
+  }
+
   return {
-    filePath,
     write(event, details = {}) {
+      const filePath = resolveFilePath(details);
       mkdirSync(dirname(filePath), { recursive: true });
       appendFileSync(
         filePath,
@@ -46,7 +76,11 @@ function normalizeTail(value) {
 }
 
 export function readJsonlLog(options = {}) {
-  const filePath = options.filePath ?? getDaemonLogFilePath();
+  const filePath =
+    options.filePath ??
+    (options.agentSessionId
+      ? getSessionLogFilePath(options.agentSessionId, { logDir: options.logDir })
+      : getDaemonLogFilePath({ logDir: options.logDir }));
   const tail = normalizeTail(options.tail);
   let text;
   try {

@@ -17,10 +17,17 @@ function createFakeChannelRunner() {
   };
 }
 
+function startTestDaemon(config, options = {}) {
+  return startDaemon(config, {
+    logger: { write() {} },
+    ...options,
+  });
+}
+
 describe("daemon runner", () => {
   it("starts http and channel runners, then shuts down through the local protocol", async () => {
     const channelRunner = createFakeChannelRunner();
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -49,7 +56,7 @@ describe("daemon runner", () => {
 
   it("auto-closes after the configured idle timeout", async () => {
     const channelRunner = createFakeChannelRunner();
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -72,7 +79,7 @@ describe("daemon runner", () => {
   it("wires an injected reaction client into acknowledgments", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedReactions = [];
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -123,7 +130,7 @@ describe("daemon runner", () => {
   it("wires an injected message client into text sending", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedMessages = [];
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -171,7 +178,7 @@ describe("daemon runner", () => {
   it("wires an injected chat context client into context reads", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedContextRequests = [];
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -226,7 +233,7 @@ describe("daemon runner", () => {
   it("wires an injected chat members client into member reads", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedMemberRequests = [];
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -286,7 +293,7 @@ describe("daemon runner", () => {
   it("wires an injected chat client into chat search", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedSearches = [];
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -332,7 +339,7 @@ describe("daemon runner", () => {
   it("wires an injected message client into file sending", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedFiles = [];
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -380,7 +387,7 @@ describe("daemon runner", () => {
   it("wires an injected message client into media sending", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedMedia = [];
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",
@@ -448,7 +455,7 @@ describe("daemon runner", () => {
   it("wires an injected resource client into resource downloads", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedDownloads = [];
-    const daemon = await startDaemon(
+    const daemon = await startTestDaemon(
       {
         appId: "cli_test",
         appSecret: "secret",

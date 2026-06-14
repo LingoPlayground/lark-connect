@@ -114,6 +114,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest doctor --live/);
     assert.match(setupSkill, /^npx -y curiosea-lark-connect@latest daemon start$/m);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest logs --tail 50/);
+    assert.match(setupSkill, /logs --agent-session-id/);
     assert.doesNotMatch(setupSkill, /daemon start --detach/);
     assert.doesNotMatch(
       setupSkill,
@@ -172,6 +173,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /diagnostics/);
     assert.match(responderSkill, /deliverySource/);
     assert.match(responderSkill, /logs --tail 50/);
+    assert.match(responderSkill, /logs --agent-session-id/);
     assert.match(responderSkill, /thread automation/);
     assert.match(responderSkill, /background shell/);
     assert.match(
@@ -199,6 +201,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(readme, /不要把超时当作监听结束/);
     assert.match(readme, /diagnostics/);
     assert.match(readme, /logs --tail 50/);
+    assert.match(readme, /logs --agent-session-id/);
     assert.match(readme, /继续调用 `lark_connect_wait_messages`/);
     assert.match(readme, /node src\/cli\.js daemon start --foreground/);
   });

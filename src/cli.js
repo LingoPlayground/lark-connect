@@ -14,7 +14,7 @@ import {
   clearSavedConfig,
 } from "./config.js";
 import { createDaemonHttpClient } from "./daemon/http-client.js";
-import { getDaemonLogFilePath, readJsonlLog } from "./daemon/logger.js";
+import { getDaemonLogFilePath, getSessionLogFilePath, readJsonlLog } from "./daemon/logger.js";
 import { startDaemon } from "./daemon/runner.js";
 import { runLiveDoctor } from "./lark/doctor.js";
 import { listenOnce } from "./lark/listener.js";
@@ -78,7 +78,7 @@ Usage:
   curiosea-lark-connect doctor [--live] [--app-id cli_xxx] [--chat-id oc_xxx]
   curiosea-lark-connect debug listen-once [--timeout-ms 120000] --chat-id oc_xxx
   curiosea-lark-connect wait --agent-session-id <id> [--timeout-ms 300000] [--daemon-port 51745]
-  curiosea-lark-connect logs [--tail 100] [--file <path>]
+  curiosea-lark-connect logs [--tail 100] [--agent-session-id <id>] [--file <path>]
   curiosea-lark-connect daemon start [--foreground] [--daemon-port 51745]
   curiosea-lark-connect daemon status [--daemon-port 51745]
   curiosea-lark-connect daemon stop [--daemon-port 51745]
@@ -304,9 +304,20 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
   }
 
   if (command === "logs") {
-    const filePath = hasOption(argv, "--file")
-      ? readRequiredOptionValue(argv, "--file")
-      : getDaemonLogFilePath();
+    const logDir = hasOption(argv, "--log-dir")
+      ? readRequiredOptionValue(argv, "--log-dir")
+      : undefined;
+    const agentSessionId = hasOption(argv, "--agent-session-id")
+      ? readRequiredOptionValue(argv, "--agent-session-id")
+      : undefined;
+    let filePath;
+    if (hasOption(argv, "--file")) {
+      filePath = readRequiredOptionValue(argv, "--file");
+    } else if (agentSessionId) {
+      filePath = getSessionLogFilePath(agentSessionId, { logDir });
+    } else {
+      filePath = getDaemonLogFilePath({ logDir });
+    }
     const tail = readIntegerOption(argv, "--tail", 100, { min: 1, max: 10_000 });
     stdout.write(`${JSON.stringify(readJsonlLog({ filePath, tail }), null, 2)}\n`);
     return;

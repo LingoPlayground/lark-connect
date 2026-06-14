@@ -91,7 +91,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 群聊只有明确提及机器人的消息会被路由给智能体。已绑定单聊不要求提及机器人。立即检查时可以用 `lark_connect_poll_messages`。
 
-`lark_connect_wait_messages` 和 `lark_connect_poll_messages` 返回的 `diagnostics` 可用于排查监听问题。重点看 `deliverySource` 区分是 MCP 短等待、MCP 轮询还是 CLI 等待领取了消息；看 `queueBefore` 和 `queueAfter` 判断消息是否已经进入队列、是否已被投递。如果怀疑守护进程没有收到飞书事件，再用 `npx -y curiosea-lark-connect@latest logs --tail 50` 查看结构化日志。
+`lark_connect_wait_messages` 和 `lark_connect_poll_messages` 返回的 `diagnostics` 可用于排查监听问题。重点看 `deliverySource` 区分是 MCP 短等待、MCP 轮询还是 CLI 等待领取了消息；看 `queueBefore` 和 `queueAfter` 判断消息是否已经进入队列、是否已被投递。排查时优先查看当前会话日志：`npx -y curiosea-lark-connect@latest logs --agent-session-id <绑定时使用的 agentSessionId> --tail 50`。如果会话日志没有对应事件，再用 `npx -y curiosea-lark-connect@latest logs --tail 50` 查看 daemon 日志，确认守护进程是否启动、是否收到未绑定或未路由事件。
 
 如果等待返回消息：
 

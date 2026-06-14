@@ -4,10 +4,11 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import { main } from "../src/cli.js";
+import { getSessionLogFilePath } from "../src/daemon/logger.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -314,6 +315,43 @@ describe("cli logs", () => {
       {
         event: "new",
         messageId: "om_new",
+      },
+    ]);
+  });
+
+  it("prints a session log when an agent session id is provided", async () => {
+    const logRoot = await mkdtemp(join(tmpdir(), "lark-connect-session-cli-"));
+    const logFile = getSessionLogFilePath("thread/a:b", { logDir: logRoot });
+    const output = createStdout();
+    await mkdir(dirname(logFile), { recursive: true });
+    await writeFile(
+      logFile,
+      [
+        JSON.stringify({ event: "wait_registered", agentSessionId: "thread/a:b" }),
+        JSON.stringify({ event: "wait_timeout", agentSessionId: "thread/a:b" }),
+        "",
+      ].join("\n"),
+    );
+
+    await main(
+      [
+        "logs",
+        "--agent-session-id",
+        "thread/a:b",
+        "--log-dir",
+        logRoot,
+        "--tail",
+        "1",
+      ],
+      {
+        stdout: output.stdout,
+      },
+    );
+
+    assert.deepEqual(JSON.parse(output.read()), [
+      {
+        event: "wait_timeout",
+        agentSessionId: "thread/a:b",
       },
     ]);
   });

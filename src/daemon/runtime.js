@@ -425,15 +425,16 @@ export function createDaemonRuntime(options = {}) {
 
     receiveLarkMessage(payload) {
       touch();
+
+      const binding = bindingsByChatId.get(payload.chatId);
+      const directMessage = payload.chatType === "p2p";
       writeLog("lark_event_received", {
+        agentSessionId: binding?.agentSessionId,
         messageId: payload.messageId,
         chatId: payload.chatId,
         chatType: payload.chatType,
         mentionedBot: Boolean(payload.mentionedBot),
       });
-
-      const binding = bindingsByChatId.get(payload.chatId);
-      const directMessage = payload.chatType === "p2p";
       if (!binding && directMessage) {
         pruneDirectChatSignalBuffer();
         if (

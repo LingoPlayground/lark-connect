@@ -14,11 +14,19 @@ function nextIdleDelay(runtime) {
 }
 
 export async function startDaemon(config, options = {}) {
+  const logger = options.logger ?? createJsonlLogger();
+  function writeLog(event, details = {}) {
+    try {
+      logger.write(event, details);
+    } catch {
+      // Logging is diagnostic only; daemon lifecycle must not depend on it.
+    }
+  }
   const runtime =
     options.runtime ??
     createDaemonRuntime({
       idleTimeoutMs: config.daemonIdleTimeoutMs,
-      logger: options.logger ?? createJsonlLogger(),
+      logger,
     });
   const channelRunner =
     options.channelRunner ??
@@ -95,6 +103,7 @@ export async function startDaemon(config, options = {}) {
     if (closePromise) return closePromise;
 
     closePromise = (async () => {
+      writeLog("daemon_stopping");
       if (idleTimer) clearTimeout(idleTimer);
       await channelRunner.stop?.();
       await reactionClient?.close?.();
@@ -104,6 +113,7 @@ export async function startDaemon(config, options = {}) {
       await chatMembersClient?.close?.();
       await resourceClient?.close?.();
       await httpServer.close();
+      writeLog("daemon_stopped");
       resolveClosed();
     })();
 
@@ -123,8 +133,18 @@ export async function startDaemon(config, options = {}) {
     idleTimer.unref?.();
   }
 
+  writeLog("daemon_starting", {
+    host: config.daemonHost,
+    port: config.daemonPort,
+    idleTimeoutMs: config.daemonIdleTimeoutMs,
+  });
   await channelRunner.start();
   const address = await httpServer.listen();
+  writeLog("daemon_started", {
+    host: address.host,
+    port: address.port,
+    idleTimeoutMs: config.daemonIdleTimeoutMs,
+  });
   scheduleIdleCheck();
 
   return {

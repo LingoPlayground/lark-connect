@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   createJsonlLogger,
   getDaemonLogFilePath,
+  getSessionLogFilePath,
   readJsonlLog,
 } from "../src/daemon/logger.js";
 
@@ -55,5 +56,47 @@ describe("daemon logger", () => {
       getDaemonLogFilePath(),
       /curiosea-lark-connect\/daemon\.jsonl$/,
     );
+  });
+
+  it("routes session events to a per-session log file", async () => {
+    const logDir = await mkdtemp(join(tmpdir(), "lark-connect-session-logs-"));
+    const logger = createJsonlLogger({
+      logDir,
+      now: () => 123_456,
+      pid: 42,
+    });
+
+    await logger.write("daemon_started", { port: 51745 });
+    await logger.write("wait_timeout", {
+      agentSessionId: "thread/a:b",
+      deliverySource: "mcp_wait",
+    });
+
+    assert.deepEqual(
+      await readJsonlLog({ filePath: getDaemonLogFilePath({ logDir }) }),
+      [
+        {
+          timestamp: 123_456,
+          pid: 42,
+          event: "daemon_started",
+          port: 51745,
+        },
+      ],
+    );
+    assert.deepEqual(
+      await readJsonlLog({
+        filePath: getSessionLogFilePath("thread/a:b", { logDir }),
+      }),
+      [
+        {
+          timestamp: 123_456,
+          pid: 42,
+          event: "wait_timeout",
+          agentSessionId: "thread/a:b",
+          deliverySource: "mcp_wait",
+        },
+      ],
+    );
+    assert.match(getSessionLogFilePath("thread/a:b", { logDir }), /thread_a_b\.jsonl$/);
   });
 });
