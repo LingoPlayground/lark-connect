@@ -20,6 +20,10 @@ function parseToolJson(response) {
   return JSON.parse(response.result.content[0].text);
 }
 
+function toolByName(tools, name) {
+  return tools.find((tool) => tool.name === name);
+}
+
 describe("mcp daemon tools", () => {
   it("exposes daemon binding and message tools", async () => {
     const response = await handleMcpMessage({
@@ -32,6 +36,8 @@ describe("mcp daemon tools", () => {
       response.result.tools.map((tool) => tool.name),
       [
         "lark_connect_daemon_status",
+        "lark_connect_search_chats",
+        "lark_connect_wait_direct_chat_signal",
         "lark_connect_bind_session",
         "lark_connect_poll_messages",
         "lark_connect_wait_messages",
@@ -43,6 +49,53 @@ describe("mcp daemon tools", () => {
         "lark_connect_download_resource",
       ],
     );
+  });
+
+  it("exposes strict schemas for chat discovery tools", async () => {
+    const response = await handleMcpMessage({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    });
+    const tools = response.result.tools;
+
+    assert.deepEqual(toolByName(tools, "lark_connect_search_chats").inputSchema, {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Group chat name keyword to search." },
+        pageSize: { type: "number", description: "Maximum number of chats to return." },
+        pageToken: { type: "string", description: "Optional pagination token from a prior search." },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    });
+    assert.deepEqual(toolByName(tools, "lark_connect_wait_direct_chat_signal").inputSchema, {
+      type: "object",
+      properties: {
+        challengeText: {
+          type: "string",
+          description: "Exact text the user must send to the bot direct chat.",
+        },
+        agentKind: {
+          type: "string",
+          description: "Agent runtime, for example codex or claude-code.",
+        },
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        workspace: {
+          type: "string",
+          description: "Absolute workspace path for this agent session.",
+        },
+        timeoutMs: {
+          type: "number",
+          description: "Maximum wait time in milliseconds.",
+        },
+      },
+      required: ["challengeText", "agentKind", "agentSessionId", "workspace"],
+      additionalProperties: false,
+    });
   });
 
   it("rejects removed setup_url without creating a daemon client", async () => {
@@ -85,6 +138,143 @@ describe("mcp daemon tools", () => {
     });
     assert.deepEqual(parseToolJson(response), {
       binding: observedArgs,
+    });
+  });
+
+  it("forwards chat search calls to the local daemon client", async () => {
+    let observedArgs;
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_search_chats", {
+        query: "测试群",
+        pageSize: 10,
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          searchChats: async (args) => {
+            observedArgs = args;
+            return {
+              query: args.query,
+              items: [{ chatId: "oc_test", name: "lark-connect 测试群" }],
+              hasMore: false,
+              pageToken: "",
+              nextSteps: [],
+            };
+          },
+        }),
+      },
+    );
+
+    assert.deepEqual(observedArgs, {
+      query: "测试群",
+      pageSize: 10,
+      pageToken: undefined,
+    });
+    assert.deepEqual(parseToolJson(response), {
+      query: "测试群",
+      items: [{ chatId: "oc_test", name: "lark-connect 测试群" }],
+      hasMore: false,
+      pageToken: "",
+      nextSteps: [],
+    });
+  });
+
+  it("forwards direct chat signal waits to the local daemon client", async () => {
+    let observedArgs;
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_wait_direct_chat_signal", {
+        challengeText: "lark-connect bind 8F2K",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 60_000,
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          waitDirectChatSignal: async (args) => {
+            observedArgs = args;
+            return {
+              signal: {
+                chatId: "oc_dm",
+                chatType: "p2p",
+                messageId: "om_signal",
+                matchedChallenge: args.challengeText,
+                bindingInput: {
+                  chatId: "oc_dm",
+                  agentKind: args.agentKind,
+                  agentSessionId: args.agentSessionId,
+                  workspace: args.workspace,
+                },
+              },
+            };
+          },
+        }),
+      },
+    );
+
+    assert.deepEqual(observedArgs, {
+      challengeText: "lark-connect bind 8F2K",
+      agentKind: "codex",
+      agentSessionId: "thread_a",
+      workspace: "/workspace/app",
+      timeoutMs: 60_000,
+    });
+    assert.equal(parseToolJson(response).signal.chatId, "oc_dm");
+  });
+
+  it("returns empty chat search next steps through the tool result", async () => {
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_search_chats", {
+        query: "不存在的群",
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          searchChats: async (args) => ({
+            query: args.query,
+            items: [],
+            hasMore: false,
+            pageToken: "",
+            nextSteps: [
+              "没有找到名称匹配“不存在的群”且机器人可见的群聊。",
+              "请用户确认群名是否正确；如果目标群还不存在，请先创建群。",
+              "如果群已经存在，请把当前飞书应用的机器人拉入群后再搜索。",
+            ],
+          }),
+        }),
+      },
+    );
+
+    const result = parseToolJson(response);
+    assert.deepEqual(result.items, []);
+    assert.match(result.nextSteps.join("\n"), /创建群/);
+    assert.match(result.nextSteps.join("\n"), /机器人拉入群/);
+  });
+
+  it("returns chat search failures as structured tool errors", async () => {
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_search_chats", {
+        query: "测试群",
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          searchChats: async () => {
+            throw new DaemonHttpError(
+              DAEMON_ERROR_CODES.LARK_CHAT_SEARCH_FAILED,
+              "failed to search Feishu chats for 测试群: permission denied",
+              {
+                status: 502,
+                details: { query: "测试群" },
+              },
+            );
+          },
+        }),
+      },
+    );
+
+    assert.equal(response.result.isError, true);
+    assert.deepEqual(parseToolJson(response), {
+      code: DAEMON_ERROR_CODES.LARK_CHAT_SEARCH_FAILED,
+      message: "failed to search Feishu chats for 测试群: permission denied",
+      details: { query: "测试群" },
     });
   });
 

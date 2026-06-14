@@ -1,6 +1,10 @@
 import { DAEMON_ERROR_CODES, DaemonRuntimeError } from "./errors.js";
 
 const DEFAULT_IDLE_TIMEOUT_MS = 3_600_000;
+const DEFAULT_DIRECT_CHAT_SIGNAL_TIMEOUT_MS = 60_000;
+const MAX_DIRECT_CHAT_SIGNAL_BUFFER_SIZE = 50;
+const DEFAULT_DIRECT_CHAT_SIGNAL_BUFFER_TTL_MS = 300_000;
+const MAX_RUNTIME_WAIT_TIMEOUT_MS = 2_147_483_647;
 
 function clone(value) {
   return globalThis.structuredClone(value);
@@ -17,10 +21,14 @@ function countMessages(messages, status) {
 export function createDaemonRuntime(options = {}) {
   const now = options.now ?? (() => Date.now());
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+  const directChatSignalBufferTtlMs =
+    options.directChatSignalBufferTtlMs ?? DEFAULT_DIRECT_CHAT_SIGNAL_BUFFER_TTL_MS;
   const bindingsByChatId = new Map();
   const sessionsById = new Map();
   const seenLarkMessageIds = new Set();
   const waitersBySessionId = new Map();
+  const directChatSignalWaiters = [];
+  const directChatSignalBuffer = [];
   let lastActivityAt = now();
   let generatedMessageCount = 0;
 
@@ -95,7 +103,49 @@ export function createDaemonRuntime(options = {}) {
       agentKind: requireNonEmptyString(input, "agentKind"),
       agentSessionId: requireNonEmptyString(input, "agentSessionId"),
       workspace: requireNonEmptyString(input, "workspace"),
-      replace: Boolean(input?.replace),
+      replace: normalizeReplace(input?.replace),
+    };
+  }
+
+  function normalizeReplace(value) {
+    if (value === undefined) return false;
+    if (typeof value !== "boolean") {
+      throw new DaemonRuntimeError(
+        DAEMON_ERROR_CODES.INVALID_REQUEST,
+        "replace must be a boolean",
+        { field: "replace" },
+      );
+    }
+    return value;
+  }
+
+  function normalizeTimeoutMs(value, defaultValue) {
+    if (value === undefined) return defaultValue;
+    const timeoutMs = Number(value);
+    if (
+      !Number.isInteger(timeoutMs) ||
+      timeoutMs < 0 ||
+      timeoutMs > MAX_RUNTIME_WAIT_TIMEOUT_MS
+    ) {
+      throw new DaemonRuntimeError(
+        DAEMON_ERROR_CODES.INVALID_REQUEST,
+        `timeoutMs must be a non-negative integer up to ${MAX_RUNTIME_WAIT_TIMEOUT_MS}`,
+        { field: "timeoutMs" },
+      );
+    }
+    return timeoutMs;
+  }
+
+  function normalizeDirectChatSignalInput(input) {
+    return {
+      challengeText: requireNonEmptyString(input, "challengeText"),
+      agentKind: requireNonEmptyString(input, "agentKind"),
+      agentSessionId: requireNonEmptyString(input, "agentSessionId"),
+      workspace: requireNonEmptyString(input, "workspace"),
+      timeoutMs: normalizeTimeoutMs(
+        input?.timeoutMs,
+        DEFAULT_DIRECT_CHAT_SIGNAL_TIMEOUT_MS,
+      ),
     };
   }
 
@@ -131,6 +181,116 @@ export function createDaemonRuntime(options = {}) {
       deliveredAt: message.deliveredAt,
       acknowledgedAt: message.acknowledgedAt,
     };
+  }
+
+  function normalizeMessageContent(value) {
+    return String(value ?? "").trim();
+  }
+
+  function directChatSignalMatches(payload, challengeText) {
+    return (
+      payload.chatType === "p2p" &&
+      normalizeMessageContent(payload.content) === challengeText
+    );
+  }
+
+  function serializeDirectChatSignal(payload, input) {
+    return {
+      chatId: payload.chatId,
+      chatType: payload.chatType,
+      messageId: payload.messageId,
+      larkMessageId: payload.messageId,
+      senderId: payload.senderId,
+      senderName: payload.senderName,
+      content: payload.content,
+      rawContentType: payload.rawContentType,
+      createTime: payload.createTime,
+      matchedChallenge: input.challengeText,
+      bindingInput: {
+        chatId: payload.chatId,
+        agentKind: input.agentKind,
+        agentSessionId: input.agentSessionId,
+        workspace: input.workspace,
+      },
+    };
+  }
+
+  function pruneDirectChatSignalBuffer() {
+    const cutoff = now() - directChatSignalBufferTtlMs;
+    for (let index = directChatSignalBuffer.length - 1; index >= 0; index -= 1) {
+      if (directChatSignalBuffer[index].receivedAt < cutoff) {
+        directChatSignalBuffer.splice(index, 1);
+      }
+    }
+  }
+
+  function hasBufferedDirectChatSignal(payload) {
+    return Boolean(
+      payload.messageId &&
+        directChatSignalBuffer.some((entry) => entry.payload.messageId === payload.messageId),
+    );
+  }
+
+  function rememberDirectChatSignal(payload) {
+    pruneDirectChatSignalBuffer();
+    directChatSignalBuffer.push({
+      payload: clone(payload),
+      receivedAt: now(),
+    });
+    markMessageSeen(payload);
+    while (directChatSignalBuffer.length > MAX_DIRECT_CHAT_SIGNAL_BUFFER_SIZE) {
+      directChatSignalBuffer.shift();
+    }
+  }
+
+  function markMessageSeen(payload) {
+    if (payload.messageId) seenLarkMessageIds.add(payload.messageId);
+  }
+
+  function findBufferedDirectChatSignal(input) {
+    pruneDirectChatSignalBuffer();
+    const index = directChatSignalBuffer.findIndex((entry) =>
+      directChatSignalMatches(entry.payload, input.challengeText),
+    );
+    if (index === -1) return undefined;
+    const [entry] = directChatSignalBuffer.splice(index, 1);
+    markMessageSeen(entry.payload);
+    return serializeDirectChatSignal(entry.payload, input);
+  }
+
+  function removeDirectChatSignalWaiter(waiter) {
+    const index = directChatSignalWaiters.indexOf(waiter);
+    if (index !== -1) directChatSignalWaiters.splice(index, 1);
+  }
+
+  function clearPendingWaiters() {
+    for (const waiters of waitersBySessionId.values()) {
+      for (const waiter of waiters) {
+        clearTimeout(waiter.timeout);
+        waiter.resolve([]);
+      }
+    }
+    waitersBySessionId.clear();
+
+    while (directChatSignalWaiters.length > 0) {
+      const waiter = directChatSignalWaiters.shift();
+      clearTimeout(waiter.timeout);
+      waiter.resolve(null);
+    }
+  }
+
+  function resolveDirectChatSignalWaiter(payload) {
+    const waiter = directChatSignalWaiters.find((candidate) =>
+      directChatSignalMatches(payload, candidate.input.challengeText),
+    );
+    if (!waiter) return undefined;
+
+    removeDirectChatSignalWaiter(waiter);
+    clearTimeout(waiter.timeout);
+    markMessageSeen(payload);
+    const signal = serializeDirectChatSignal(payload, waiter.input);
+    waiter.resolve(signal);
+    return signal;
   }
 
   function deliverPendingMessages(agentSessionId) {
@@ -206,8 +366,10 @@ export function createDaemonRuntime(options = {}) {
       }
 
       if (existing) {
+        clearPendingWaiters();
         bindingsByChatId.clear();
         sessionsById.clear();
+        directChatSignalBuffer.length = 0;
       }
 
       const binding = {
@@ -225,16 +387,35 @@ export function createDaemonRuntime(options = {}) {
     receiveLarkMessage(payload) {
       touch();
 
+      const binding = bindingsByChatId.get(payload.chatId);
+      const directMessage = payload.chatType === "p2p";
+      if (!binding && directMessage) {
+        pruneDirectChatSignalBuffer();
+        if (
+          payload.messageId &&
+          (seenLarkMessageIds.has(payload.messageId) || hasBufferedDirectChatSignal(payload))
+        ) {
+          return { accepted: false, reason: "duplicate" };
+        }
+
+        const signal = resolveDirectChatSignalWaiter(payload);
+        if (signal) {
+          return { accepted: true, reason: "direct_chat_signal", signal };
+        }
+
+        rememberDirectChatSignal(payload);
+        return { accepted: false, reason: "direct_chat_signal_buffered" };
+      }
+
+      if (!binding || (!directMessage && !payload.mentionedBot)) {
+        return { accepted: false, reason: "unrouted" };
+      }
+
       const larkMessageId = payload.messageId;
       if (larkMessageId && seenLarkMessageIds.has(larkMessageId)) {
         return { accepted: false, reason: "duplicate" };
       }
       if (larkMessageId) seenLarkMessageIds.add(larkMessageId);
-
-      const binding = bindingsByChatId.get(payload.chatId);
-      if (!binding || !payload.mentionedBot) {
-        return { accepted: false, reason: "unrouted" };
-      }
 
       const session = getOrCreateSession(binding.agentSessionId);
       const id = larkMessageId ?? `message_${++generatedMessageCount}`;
@@ -250,6 +431,26 @@ export function createDaemonRuntime(options = {}) {
       session.messages.set(id, message);
       flushWaiters(binding.agentSessionId);
       return { accepted: true, message: serializeMessage(message) };
+    },
+
+    waitForDirectChatSignal(input) {
+      touch();
+      const next = normalizeDirectChatSignalInput(input);
+      const buffered = findBufferedDirectChatSignal(next);
+      if (buffered) return Promise.resolve(buffered);
+      if (next.timeoutMs <= 0) return Promise.resolve(null);
+
+      return new Promise((resolve) => {
+        const waiter = {
+          input: next,
+          resolve,
+          timeout: setTimeout(() => {
+            removeDirectChatSignalWaiter(waiter);
+            resolve(null);
+          }, next.timeoutMs),
+        };
+        directChatSignalWaiters.push(waiter);
+      });
     },
 
     pollMessages(agentSessionId) {

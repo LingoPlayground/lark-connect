@@ -91,15 +91,15 @@
 ## 配置和安全
 
 - 应用 ID 和应用密钥只通过 `setup` 写入本机配置文件，或由运行时环境变量临时覆盖。不要写进测试夹具、插件清单、MCP 配置、README 示例输出或 PR 描述。
-- `setup` 只处理应用级配置，不能保存群聊 ID。群聊 ID 始终通过 `lark_connect_bind_session` 绑定到当前会话。
+- `setup` 只处理应用级配置，不能保存聊天 ID。聊天 ID 始终通过 `lark_connect_bind_session` 绑定到当前会话。
 - 如无必要，勿增实体。守护进程当前只使用内存状态；不要为了方便调试新增持久化绑定、消息表或数据库。
-- 当前同一时间只允许一个群聊和一个智能体会话绑定。改变这个约束属于外部行为变更，必须先写清需求和迁移策略。
+- 当前同一时间只允许一个聊天和一个智能体会话绑定。改变这个约束属于外部行为变更，必须先写清需求和迁移策略。
 
 ## 代码和测试
 
 - CLI（Command Line Interface，命令行接口）行为变化要同步更新 `tests/cli.test.mjs`，MCP 工具变化要同步更新 `tests/mcp*.test.mjs`，守护进程路由和状态变化要同步更新 `tests/daemon*.test.mjs`。
 - 插件载荷、技能、市场清单或 MCP 描述变化要同步更新 `tests/plugin-packaging.test.mjs`。
-- 修改用户可见安装、配置、等待或群消息处理流程时，同步更新 `README.md` 和相关 skill。
+- 修改用户可见安装、配置、等待或聊天消息处理流程时，同步更新 `README.md` 和相关 skill。
 - 纯文档改动至少运行 `git diff --check`，并用 `rg` 检查是否留下过时路径或命令。代码改动至少运行相关 `node --test ...` 和 `npm run build`；发布前运行 `npm test` 与 `npm pack --dry-run`。
 
 ## 插件和发布

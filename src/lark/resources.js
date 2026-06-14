@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve, sep } from "node:path";
 
-import { createDefaultLarkChannel } from "./listener.js";
+import { createDefaultLarkChannel } from "./channel.js";
 
 function requireResourceConfig(config) {
   if (!config.appId) throw new Error("FEISHU_APP_ID is required for resources");

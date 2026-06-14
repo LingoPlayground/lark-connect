@@ -15,7 +15,9 @@
 - `lark-cli` 已经能跑通 `event consume im.message.receive_v1`、`im +messages-send`、`im +messages-reply`、资源下载等动作，适合作为最小原型验证工具，但命令行输出和版本变化不适合作为核心运行时契约。
 - 官方 `lark-openapi-mcp` 是 OpenAPI 工具型 MCP，适合让代理主动调用飞书接口，但不负责把群消息事件主动推给本地会话，所以不能单独替代事件入口。
 
-## 当前实现状态
+## 早期实现状态快照
+
+> 本节记录早期调研阶段的实现状态，不作为当前功能清单的唯一来源。当前用户文档以仓库根目录的 README 和插件技能为准。
 
 已开始落地一个 Node.js 包的双入口骨架：
 
@@ -27,13 +29,13 @@
 当前已实现命令：
 
 - `setup`：不带参数时输出飞书应用配置引导。
-- `setup --app-id cli_xxx --app-secret ...`：保存应用级本地配置，不保存群聊 ID。
+- `setup --app-id cli_xxx --app-secret ...`：保存应用级本地配置，不保存聊天 ID。
 - `config show/path/clear`：查看配置状态、查看配置文件路径、清除本地配置。
 - `doctor`：输出本地配置状态。
 - `doctor --live`：用已配置的应用凭据做真实飞书 API 检查，包括获取租户访问令牌和查询机器人身份；传入 `--chat-id` 时额外检查目标群访问。
-- `debug listen-once --chat-id oc_xxx`：通过 `node-sdk Channel` 等待目标群里下一条提及机器人消息，输出归一化消息后退出。
+- `debug listen-once --chat-id oc_xxx`：通过 `node-sdk Channel` 等待目标聊天里下一条可路由消息，输出归一化消息后退出；群聊要求提及机器人，已知单聊不要求提及。
 - `daemon start/status/stop`：启动、查看、停止本地守护进程；启动时从本地配置读取应用凭据，群聊由 MCP 绑定工具传入。
-- `wait --agent-session-id <id> --timeout-ms 300000`：通过本地守护进程等待指定 Agent 会话的已绑定群消息，面向 Claude Code background shell。
+- `wait --agent-session-id <id> --timeout-ms 300000`：通过本地守护进程等待指定 Agent 会话的已绑定聊天消息，面向 Claude Code background shell。
 - `mcp`：启动 MCP 标准输入输出服务。
 
 尚未实现：

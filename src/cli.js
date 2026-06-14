@@ -95,7 +95,7 @@ https://open.feishu.cn/app
 Then save app-level credentials locally:
 curiosea-lark-connect setup --app-id cli_xxx --app-secret <secret>
 
-Group chats are not part of app setup. Bind a chat to an agent session with lark_connect_bind_session.
+Chat IDs are not part of app setup. Bind a chat to an agent session with lark_connect_bind_session.
 `);
 }
 

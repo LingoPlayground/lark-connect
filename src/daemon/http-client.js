@@ -54,6 +54,20 @@ export function createDaemonHttpClient(options = {}) {
       });
     },
 
+    searchChats(input = {}) {
+      return request("/chats/search", {
+        method: "POST",
+        body: input,
+      });
+    },
+
+    waitDirectChatSignal(input = {}) {
+      return request("/direct-chat/signals/wait", {
+        method: "POST",
+        body: input,
+      });
+    },
+
     pollMessages(agentSessionId) {
       return request(`/sessions/${encodeURIComponent(agentSessionId)}/messages`);
     },

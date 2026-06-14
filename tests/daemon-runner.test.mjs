@@ -167,6 +167,52 @@ describe("daemon runner", () => {
     }
   });
 
+  it("wires an injected chat client into chat search", async () => {
+    const channelRunner = createFakeChannelRunner();
+    const observedSearches = [];
+    const daemon = await startDaemon(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+        chatId: "oc_target",
+        daemonHost: "127.0.0.1",
+        daemonPort: 0,
+        daemonIdleTimeoutMs: 3_600_000,
+      },
+      {
+        channelRunner,
+        chatClient: {
+          async searchChats(input) {
+            observedSearches.push(input);
+            return {
+              query: input.query,
+              items: [{ chatId: "oc_test", name: "lark-connect 测试群" }],
+              hasMore: false,
+              pageToken: "",
+              nextSteps: [],
+            };
+          },
+        },
+      },
+    );
+
+    const client = createDaemonHttpClient(daemon.address);
+    try {
+      const result = await client.searchChats({ query: "测试群", pageSize: 10 });
+
+      assert.deepEqual(observedSearches, [
+        {
+          query: "测试群",
+          pageSize: 10,
+          pageToken: undefined,
+        },
+      ]);
+      assert.deepEqual(result.items, [{ chatId: "oc_test", name: "lark-connect 测试群" }]);
+    } finally {
+      await daemon.close();
+    }
+  });
+
   it("wires an injected message client into file sending", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedFiles = [];

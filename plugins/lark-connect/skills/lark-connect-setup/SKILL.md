@@ -5,7 +5,7 @@ description: 配置 lark-connect。当用户需要连接飞书或 Lark 机器人
 
 # 飞书连接配置
 
-使用这个技能把本机准备好，之后智能体会话才能绑定到飞书群。
+使用这个技能把本机准备好，之后智能体会话才能绑定到飞书聊天。
 
 ## 流程
 
@@ -29,11 +29,12 @@ npx -y curiosea-lark-connect@latest setup
 npx -y curiosea-lark-connect@latest setup --app-id cli_xxx --app-secret <secret>
 ```
 
-不要在 setup 阶段要求或保存群聊 ID。群聊 ID 属于会话绑定参数。
+不要在 setup 阶段要求或保存聊天 ID。聊天 ID 属于会话绑定参数。
 
 3. 提醒用户确认飞书后台前置条件：
 
-- 机器人已经加入目标群。
+- 如果目标是群聊，机器人已经加入目标群。
+- 如果目标是单聊，用户可以打开机器人单聊并发送智能体给出的挑战文本。
 - 应用已经开通接收消息事件需要的权限和事件订阅。
 - 如果后续需要发送消息、添加 reaction、下载资源，相应权限也要在飞书后台开通。
 

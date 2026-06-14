@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 
 import { DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT } from "../config.js";
+import { MAX_CHAT_SEARCH_PAGE_SIZE } from "../lark/chats.js";
 import { DEFAULT_ACK_REACTION_EMOJI_TYPE } from "../lark/reactions.js";
 import { createDaemonRuntime } from "./runtime.js";
 import { DAEMON_ERROR_CODES, DaemonRuntimeError } from "./errors.js";
@@ -17,6 +18,7 @@ function statusForError(error) {
   if (error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) return 400;
   if (error?.code === DAEMON_ERROR_CODES.LARK_REACTION_FAILED) return 502;
   if (error?.code === DAEMON_ERROR_CODES.LARK_SEND_FAILED) return 502;
+  if (error?.code === DAEMON_ERROR_CODES.LARK_CHAT_SEARCH_FAILED) return 502;
   if (error?.code === DAEMON_ERROR_CODES.LARK_RESOURCE_DOWNLOAD_FAILED) return 502;
   return 500;
 }
@@ -199,6 +201,64 @@ function requireString(value, fieldName) {
   return text;
 }
 
+function requireObjectBody(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    const error = new Error("request body must be a JSON object");
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+  return body;
+}
+
+function normalizeDirectChatSignalWaitBody(body) {
+  const input = requireObjectBody(body);
+  return {
+    challengeText: input.challengeText,
+    agentKind: input.agentKind,
+    agentSessionId: input.agentSessionId,
+    workspace: input.workspace,
+    timeoutMs: input.timeoutMs,
+  };
+}
+
+function requireStringField(value, fieldName) {
+  if (typeof value !== "string") {
+    const error = new Error(`${fieldName} must be a string`);
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+  return requireString(value, fieldName);
+}
+
+function normalizeOptionalStringField(value, fieldName) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") {
+    const error = new Error(`${fieldName} must be a string`);
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+  return value.trim() || undefined;
+}
+
+function normalizeOptionalChatSearchPageSize(value) {
+  if (value === undefined) return undefined;
+
+  const pageSize = Number(value);
+  if (
+    !Number.isInteger(pageSize) ||
+    pageSize < 1 ||
+    pageSize > MAX_CHAT_SEARCH_PAGE_SIZE
+  ) {
+    const error = new Error(
+      `pageSize must be an integer between 1 and ${MAX_CHAT_SEARCH_PAGE_SIZE}`,
+    );
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+
+  return pageSize;
+}
+
 function createReactionError(cause, message, emojiType) {
   const causeMessage = cause instanceof Error ? cause.message : String(cause);
   const error = new Error(
@@ -222,6 +282,17 @@ function createSendError(cause, agentSessionId, chatId) {
   error.details = {
     agentSessionId,
     chatId,
+  };
+  return error;
+}
+
+function createChatSearchError(cause, query) {
+  const causeMessage = cause instanceof Error ? cause.message : String(cause);
+  const error = new Error(`failed to search Feishu chats for ${query}: ${causeMessage}`);
+  error.code = DAEMON_ERROR_CODES.LARK_CHAT_SEARCH_FAILED;
+  error.cause = cause;
+  error.details = {
+    query,
   };
   return error;
 }
@@ -289,6 +360,28 @@ async function sendTextMessage(messageClient, agentSessionId, chatId, body) {
   } catch (cause) {
     if (cause?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) throw cause;
     throw createSendError(cause, agentSessionId, chatId);
+  }
+}
+
+async function searchChats(chatClient, body) {
+  const input = requireObjectBody(body);
+  const query = requireStringField(input.query, "query");
+  const pageSize = normalizeOptionalChatSearchPageSize(input.pageSize);
+  const pageToken = normalizeOptionalStringField(input.pageToken, "pageToken");
+
+  if (!chatClient?.searchChats) {
+    throw createChatSearchError(new Error("chat search client is unavailable"), query);
+  }
+
+  try {
+    return await chatClient.searchChats({
+      query,
+      pageSize,
+      pageToken,
+    });
+  } catch (cause) {
+    if (cause?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) throw cause;
+    throw createChatSearchError(cause, query);
   }
 }
 
@@ -415,6 +508,7 @@ export function createDaemonHttpServer(options = {}) {
   const port = options.port ?? DEFAULT_DAEMON_PORT;
   const reactionClient = options.reactionClient;
   const messageClient = options.messageClient;
+  const chatClient = options.chatClient;
   const resourceClient = options.resourceClient;
   const ackReactionEmojiType = options.ackReactionEmojiType ?? DEFAULT_ACK_REACTION_EMOJI_TYPE;
 
@@ -436,6 +530,21 @@ export function createDaemonHttpServer(options = {}) {
       if (request.method === "POST" && pathname === "/bindings") {
         const body = await readJsonBody(request);
         sendJson(response, 201, { binding: runtime.bindSession(body) });
+        return;
+      }
+
+      if (request.method === "POST" && pathname === "/chats/search") {
+        const body = await readJsonBody(request);
+        sendJson(response, 200, await searchChats(chatClient, body));
+        return;
+      }
+
+      if (request.method === "POST" && pathname === "/direct-chat/signals/wait") {
+        const body = await readJsonBody(request);
+        const signal = await runtime.waitForDirectChatSignal(
+          normalizeDirectChatSignalWaitBody(body),
+        );
+        sendJson(response, 200, { signal });
         return;
       }
 

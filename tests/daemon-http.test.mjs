@@ -32,6 +32,7 @@ async function createTestServer(options = {}) {
   return {
     runtime,
     client,
+    address,
     async close() {
       await daemon.close();
     },
@@ -75,6 +76,320 @@ describe("daemon http client", () => {
 });
 
 describe("daemon http server", () => {
+  it("searches chats through the local protocol without a bound session", async () => {
+    const observedSearches = [];
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats(input) {
+          observedSearches.push(input);
+          return {
+            query: input.query,
+            items: [
+              {
+                chatId: "oc_test",
+                name: "lark-connect 测试群",
+                chatMode: "group",
+                memberCount: 3,
+              },
+            ],
+            hasMore: false,
+            pageToken: "",
+            nextSteps: [],
+          };
+        },
+      },
+    });
+    try {
+      const result = await server.client.searchChats({
+        query: "测试群",
+        pageSize: 10,
+      });
+
+      assert.deepEqual(observedSearches, [
+        {
+          query: "测试群",
+          pageSize: 10,
+          pageToken: undefined,
+        },
+      ]);
+      assert.deepEqual(result.items.map((item) => item.chatId), ["oc_test"]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("returns empty search guidance through the local protocol", async () => {
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats(input) {
+          return {
+            query: input.query,
+            items: [],
+            hasMore: false,
+            pageToken: "",
+            nextSteps: [
+              "没有找到名称匹配“测试群”且机器人可见的群聊。",
+              "请用户确认群名是否正确；如果目标群还不存在，请先创建群。",
+              "如果群已经存在，请把当前飞书应用的机器人拉入群后再搜索。",
+            ],
+          };
+        },
+      },
+    });
+    try {
+      const result = await server.client.searchChats({ query: "测试群" });
+
+      assert.deepEqual(result.items, []);
+      assert.match(result.nextSteps.join("\n"), /创建群/);
+      assert.match(result.nextSteps.join("\n"), /机器人拉入群/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reports chat search failures", async () => {
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats() {
+          throw new Error("permission denied");
+        },
+      },
+    });
+    try {
+      await assert.rejects(
+        () => server.client.searchChats({ query: "测试群" }),
+        (error) =>
+          error?.code === "LARK_CHAT_SEARCH_FAILED" &&
+          error?.status === 502 &&
+          /permission denied/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid chat search requests before reporting Feishu failures", async () => {
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats() {
+          throw new Error("should not be wrapped as Feishu failure");
+        },
+      },
+    });
+    try {
+      await assert.rejects(
+        () => server.client.searchChats({ query: "测试群", pageSize: 0 }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /pageSize/.test(error.message),
+      );
+      await assert.rejects(
+        () => server.client.searchChats({ query: "   " }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /query/.test(error.message),
+      );
+      await assert.rejects(
+        () => server.client.searchChats({ query: ["测试群"] }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /query/.test(error.message),
+      );
+      await assert.rejects(
+        () => server.client.searchChats({ query: "测试群", pageToken: { bad: true } }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          /pageToken/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects a null chat search request body as an invalid request", async () => {
+    const server = await createTestServer({
+      chatClient: {
+        async searchChats() {
+          throw new Error("should not call search client");
+        },
+      },
+    });
+    try {
+      const response = await fetch(
+        `http://${server.address.host}:${server.address.port}/chats/search`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "null",
+        },
+      );
+      const payload = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.equal(payload.error.code, DAEMON_ERROR_CODES.INVALID_REQUEST);
+      assert.match(payload.error.message, /body/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("waits for a direct chat signal through the local protocol", async () => {
+    const server = await createTestServer();
+    try {
+      const pending = server.client.waitDirectChatSignal({
+        challengeText: "lark-connect bind 8F2K",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+        timeoutMs: 1_000,
+      });
+
+      server.runtime.receiveLarkMessage({
+        messageId: "om_signal",
+        chatId: "oc_dm",
+        chatType: "p2p",
+        content: "lark-connect bind 8F2K",
+        mentionedBot: false,
+        senderId: "ou_sender",
+      });
+
+      const result = await pending;
+
+      assert.equal(result.signal.chatId, "oc_dm");
+      assert.equal(result.signal.messageId, "om_signal");
+      assert.deepEqual(result.signal.bindingInput, {
+        chatId: "oc_dm",
+        agentKind: "codex",
+        agentSessionId: "thread_a",
+        workspace: "/workspace/app",
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid direct chat signal wait requests", async () => {
+    const server = await createTestServer();
+    try {
+      for (const [field, input] of [
+        [
+          "challengeText",
+          {
+            challengeText: "   ",
+            agentKind: "codex",
+            agentSessionId: "thread_a",
+            workspace: "/workspace/app",
+          },
+        ],
+        [
+          "agentKind",
+          {
+            challengeText: "lark-connect bind 8F2K",
+            agentKind: "   ",
+            agentSessionId: "thread_a",
+            workspace: "/workspace/app",
+          },
+        ],
+        [
+          "agentSessionId",
+          {
+            challengeText: "lark-connect bind 8F2K",
+            agentKind: "codex",
+            agentSessionId: "   ",
+            workspace: "/workspace/app",
+          },
+        ],
+        [
+          "workspace",
+          {
+            challengeText: "lark-connect bind 8F2K",
+            agentKind: "codex",
+            agentSessionId: "thread_a",
+            workspace: "   ",
+          },
+        ],
+        [
+          "timeoutMs",
+          {
+            challengeText: "lark-connect bind 8F2K",
+            agentKind: "codex",
+            agentSessionId: "thread_a",
+            workspace: "/workspace/app",
+            timeoutMs: 2_147_483_648,
+          },
+        ],
+      ]) {
+        await assert.rejects(
+          () => server.client.waitDirectChatSignal(input),
+          (error) =>
+            error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+            error?.status === 400 &&
+            error?.details?.field === field,
+        );
+      }
+
+      const nullResponse = await fetch(
+        `http://${server.address.host}:${server.address.port}/direct-chat/signals/wait`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "null",
+        },
+      );
+      const nullPayload = await nullResponse.json();
+
+      assert.equal(nullResponse.status, 400);
+      assert.equal(nullPayload.error.code, DAEMON_ERROR_CODES.INVALID_REQUEST);
+      assert.match(nullPayload.error.message, /body/);
+
+      const arrayResponse = await fetch(
+        `http://${server.address.host}:${server.address.port}/direct-chat/signals/wait`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "[]",
+        },
+      );
+      const arrayPayload = await arrayResponse.json();
+
+      assert.equal(arrayResponse.status, 400);
+      assert.equal(arrayPayload.error.code, DAEMON_ERROR_CODES.INVALID_REQUEST);
+      assert.match(arrayPayload.error.message, /body/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects non-boolean binding replace values through the local protocol", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () =>
+          server.client.bindSession(
+            binding({
+              chatId: "oc_other",
+              replace: "false",
+            }),
+          ),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          error?.details?.field === "replace",
+      );
+
+      const status = await server.client.status();
+      assert.deepEqual(status.bindings.map((item) => item.chatId), ["oc_target"]);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("binds a chat and exposes it through status", async () => {
     const server = await createTestServer();
     try {
@@ -123,6 +438,32 @@ describe("daemon http server", () => {
 
       const emptyWait = await server.client.waitForMessages("thread_a", { timeoutMs: 0 });
       assert.deepEqual(emptyWait.messages, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("routes bound direct messages without requiring a bot mention", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding({ chatId: "oc_dm" }));
+      server.runtime.receiveLarkMessage(
+        larkMessage({
+          messageId: "om_dm",
+          chatId: "oc_dm",
+          chatType: "p2p",
+          mentionedBot: false,
+        }),
+      );
+
+      const polled = await server.client.pollMessages("thread_a");
+      assert.deepEqual(
+        polled.messages.map((message) => ({
+          id: message.larkMessageId,
+          chatType: message.payload.chatType,
+        })),
+        [{ id: "om_dm", chatType: "p2p" }],
+      );
     } finally {
       await server.close();
     }

@@ -1,6 +1,7 @@
 import { createDaemonRuntime } from "./runtime.js";
 import { createDaemonHttpServer } from "./http-server.js";
 import { createLarkChannelRunner } from "../lark/channel-runner.js";
+import { createLarkChatClient } from "../lark/chats.js";
 import { createLarkMessageClient } from "../lark/messages.js";
 import { createLarkReactionClient } from "../lark/reactions.js";
 import { createLarkResourceClient } from "../lark/resources.js";
@@ -35,6 +36,13 @@ export async function startDaemon(config, options = {}) {
       : await createLarkMessageClient(config, {
           channelFactory: options.messageChannelFactory,
         }));
+  const chatClient =
+    options.chatClient ??
+    (options.httpServer
+      ? undefined
+      : await createLarkChatClient(config, {
+          channelFactory: options.chatChannelFactory,
+        }));
   const resourceClient =
     options.resourceClient ??
     (options.httpServer
@@ -58,6 +66,7 @@ export async function startDaemon(config, options = {}) {
       port: config.daemonPort,
       reactionClient,
       messageClient,
+      chatClient,
       resourceClient,
       onShutdown: () => close(),
     });
@@ -70,6 +79,7 @@ export async function startDaemon(config, options = {}) {
       await channelRunner.stop?.();
       await reactionClient?.close?.();
       await messageClient?.close?.();
+      await chatClient?.close?.();
       await resourceClient?.close?.();
       await httpServer.close();
       resolveClosed();
