@@ -111,11 +111,6 @@ const TOOLS = [
           description: "Maximum number of human members to return. Defaults to 50.",
         },
         pageToken: { type: "string", description: "Optional pagination token from a prior member read." },
-        botHistoryLimit: {
-          type: "number",
-          description:
-            "Recent chat messages to scan for app/bot senders. Defaults to 20 because Feishu member APIs do not return bots.",
-        },
       },
       required: ["agentSessionId"],
       additionalProperties: false,
@@ -386,7 +381,6 @@ async function handleToolCall(params, runtime) {
         await client.getChatMembers(args.agentSessionId, {
           pageSize: args.pageSize,
           pageToken: args.pageToken,
-          botHistoryLimit: args.botHistoryLimit,
         }),
       );
     }

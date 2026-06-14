@@ -124,7 +124,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /lark_connect_wait_direct_chat_signal/);
     assert.match(responderSkill, /lark_connect_get_chat_context/);
     assert.match(responderSkill, /lark_connect_get_chat_members/);
-    assert.match(responderSkill, /机器人列表不是完整枚举/);
+    assert.match(responderSkill, /members\/bots/);
     assert.match(responderSkill, /开始处理协作任务前/);
     assert.match(responderSkill, /默认最近 10 条/);
     assert.match(responderSkill, /挑战文本/);
@@ -157,7 +157,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(readme, /Agent 与其他同事的 Agent/);
     assert.match(readme, /lark_connect_get_chat_context/);
     assert.match(readme, /lark_connect_get_chat_members/);
-    assert.match(readme, /不会完整返回机器人/);
+    assert.match(readme, /members\/bots/);
     assert.match(readme, /绑定成功后必须立即调用 `lark_connect_wait_messages`/);
     assert.match(readme, /不要把超时当作监听结束/);
     assert.match(readme, /继续调用 `lark_connect_wait_messages`/);

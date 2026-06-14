@@ -7,7 +7,6 @@ import {
 } from "../lark/chat-context.js";
 import {
   DEFAULT_CHAT_MEMBERS_PAGE_SIZE,
-  MAX_CHAT_MEMBERS_BOT_HISTORY_LIMIT,
   MAX_CHAT_MEMBERS_PAGE_SIZE,
 } from "../lark/chat-members.js";
 import { MAX_CHAT_SEARCH_PAGE_SIZE } from "../lark/chats.js";
@@ -333,25 +332,6 @@ function normalizeOptionalChatMembersPageSize(value) {
   return pageSize;
 }
 
-function normalizeOptionalBotHistoryLimit(value) {
-  if (value === undefined) return undefined;
-
-  const limit = Number(value);
-  if (
-    !Number.isInteger(limit) ||
-    limit < 0 ||
-    limit > MAX_CHAT_MEMBERS_BOT_HISTORY_LIMIT
-  ) {
-    const error = new Error(
-      `botHistoryLimit must be an integer between 0 and ${MAX_CHAT_MEMBERS_BOT_HISTORY_LIMIT}`,
-    );
-    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
-    throw error;
-  }
-
-  return limit;
-}
-
 function invalidRequest(message, details) {
   const error = new Error(message);
   error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
@@ -557,7 +537,6 @@ async function getChatMembers(chatMembersClient, agentSessionId, chatId, body) {
   const input = requireObjectBody(body);
   const pageSize = normalizeOptionalChatMembersPageSize(input.pageSize);
   const pageToken = normalizeOptionalStringField(input.pageToken, "pageToken");
-  const botHistoryLimit = normalizeOptionalBotHistoryLimit(input.botHistoryLimit);
 
   if (!chatMembersClient?.getChatMembers) {
     throw createChatMembersError(
@@ -572,7 +551,6 @@ async function getChatMembers(chatMembersClient, agentSessionId, chatId, body) {
       chatId,
       pageSize,
       pageToken,
-      botHistoryLimit,
     });
   } catch (cause) {
     if (cause?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) throw cause;

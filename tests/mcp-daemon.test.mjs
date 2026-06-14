@@ -371,11 +371,6 @@ describe("mcp daemon tools", () => {
           type: "string",
           description: "Optional pagination token from a prior member read.",
         },
-        botHistoryLimit: {
-          type: "number",
-          description:
-            "Recent chat messages to scan for app/bot senders. Defaults to 20 because Feishu member APIs do not return bots.",
-        },
       },
       required: ["agentSessionId"],
       additionalProperties: false,
@@ -475,7 +470,6 @@ describe("mcp daemon tools", () => {
         agentSessionId: "thread_a",
         pageSize: 20,
         pageToken: "members_page",
-        botHistoryLimit: 10,
       }),
       {
         createDaemonHttpClientImpl: () => ({
@@ -486,8 +480,15 @@ describe("mcp daemon tools", () => {
               roster: {
                 chatId: "oc_target",
                 members: [{ memberId: "ou_human", memberType: "user" }],
-                bots: [{ appId: "cli_bot", memberType: "bot", source: "recent_message_sender" }],
-                botCoverage: "partial",
+                bots: [
+                  {
+                    botId: "ou_bot",
+                    openId: "ou_bot",
+                    memberType: "bot",
+                    source: "chat_member_bots_api",
+                  },
+                ],
+                botCoverage: "direct",
               },
             };
           },
@@ -499,14 +500,20 @@ describe("mcp daemon tools", () => {
     assert.deepEqual(observedArgs, {
       pageSize: 20,
       pageToken: "members_page",
-      botHistoryLimit: 10,
     });
     assert.deepEqual(parseToolJson(response), {
       roster: {
         chatId: "oc_target",
         members: [{ memberId: "ou_human", memberType: "user" }],
-        bots: [{ appId: "cli_bot", memberType: "bot", source: "recent_message_sender" }],
-        botCoverage: "partial",
+        bots: [
+          {
+            botId: "ou_bot",
+            openId: "ou_bot",
+            memberType: "bot",
+            source: "chat_member_bots_api",
+          },
+        ],
+        botCoverage: "direct",
       },
     });
   });

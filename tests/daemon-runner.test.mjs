@@ -243,8 +243,15 @@ describe("daemon runner", () => {
             return {
               chatId: input.chatId,
               members: [{ memberId: "ou_human", memberType: "user" }],
-              bots: [{ appId: "cli_bot", memberType: "bot", source: "recent_message_sender" }],
-              botCoverage: "partial",
+              bots: [
+                {
+                  botId: "ou_bot",
+                  openId: "ou_bot",
+                  memberType: "bot",
+                  source: "chat_member_bots_api",
+                },
+              ],
+              botCoverage: "direct",
             };
           },
         },
@@ -267,11 +274,10 @@ describe("daemon runner", () => {
           chatId: "oc_target",
           pageSize: 5,
           pageToken: undefined,
-          botHistoryLimit: undefined,
         },
       ]);
       assert.equal(result.roster.members[0].memberId, "ou_human");
-      assert.equal(result.roster.bots[0].appId, "cli_bot");
+      assert.equal(result.roster.bots[0].openId, "ou_bot");
     } finally {
       await daemon.close();
     }

@@ -3,16 +3,14 @@ import assert from "node:assert/strict";
 
 import {
   createLarkChatMembersClient,
-  DEFAULT_CHAT_MEMBERS_BOT_HISTORY_LIMIT,
   DEFAULT_CHAT_MEMBERS_PAGE_SIZE,
-  MAX_CHAT_MEMBERS_BOT_HISTORY_LIMIT,
   MAX_CHAT_MEMBERS_PAGE_SIZE,
 } from "../src/lark/chat-members.js";
 
 describe("lark chat members", () => {
-  it("lists human members and recognizable bots for a chat", async () => {
+  it("lists human members and bots for a chat", async () => {
     const observedMemberCalls = [];
-    const observedHistoryCalls = [];
+    const observedBotCalls = [];
     const client = await createLarkChatMembersClient(
       {
         appId: "cli_current",
@@ -43,37 +41,20 @@ describe("lark chat members", () => {
                     };
                   },
                 },
-                message: {
-                  async list(payload) {
-                    observedHistoryCalls.push(payload);
-                    return {
-                      data: {
-                        items: [
-                          {
-                            message_id: "om_bot",
-                            create_time: "1780000000000",
-                            sender: {
-                              id: "cli_other_bot",
-                              id_type: "app_id",
-                              sender_type: "app",
-                              sender_name: "另一个 Agent",
-                            },
-                          },
-                          {
-                            message_id: "om_user",
-                            sender: {
-                              id: "ou_human",
-                              id_type: "open_id",
-                              sender_type: "user",
-                              sender_name: "产品经理",
-                            },
-                          },
-                        ],
-                      },
-                    };
-                  },
-                },
               },
+            },
+            async request(payload) {
+              observedBotCalls.push(payload);
+              return {
+                data: {
+                  items: [
+                    {
+                      bot_id: "ou_bot",
+                      bot_name: "另一个 Agent",
+                    },
+                  ],
+                },
+              };
             },
           },
         }),
@@ -91,14 +72,10 @@ describe("lark chat members", () => {
         },
       },
     ]);
-    assert.deepEqual(observedHistoryCalls, [
+    assert.deepEqual(observedBotCalls, [
       {
-        params: {
-          container_id_type: "chat",
-          container_id: "oc_target",
-          page_size: DEFAULT_CHAT_MEMBERS_BOT_HISTORY_LIMIT,
-          sort_type: "ByCreateTimeDesc",
-        },
+        method: "GET",
+        url: "/open-apis/im/v1/chats/oc_target/members/bots",
       },
     ]);
     assert.deepEqual(result, {
@@ -116,23 +93,19 @@ describe("lark chat members", () => {
       ],
       bots: [
         {
-          appId: "cli_current",
-          memberType: "bot",
-          source: "configured_app",
-        },
-        {
-          appId: "cli_other_bot",
+          botId: "ou_bot",
+          openId: "ou_bot",
+          memberId: "ou_bot",
+          memberIdType: "open_id",
           memberType: "bot",
           name: "另一个 Agent",
-          source: "recent_message_sender",
-          messageId: "om_bot",
-          createTime: "1780000000000",
+          source: "chat_member_bots_api",
         },
       ],
-      botCoverage: "partial",
-      botSources: ["configured_app", "recent_message_sender"],
+      botCoverage: "direct",
+      botSources: ["chat_member_bots_api"],
       notes: [
-        "Feishu chat member API does not return bot members; bots are limited to the configured app and recent app senders visible in chat history.",
+        "Feishu members/bots API returns bot open_id values for bots currently in the chat.",
       ],
       hasMore: true,
       pageToken: "next_members",
@@ -142,9 +115,8 @@ describe("lark chat members", () => {
     });
   });
 
-  it("passes explicit pagination and bot history limits", async () => {
+  it("passes explicit human member pagination", async () => {
     const observedMemberCalls = [];
-    const observedHistoryCalls = [];
     const client = await createLarkChatMembersClient(
       {
         appId: "cli_current",
@@ -161,13 +133,10 @@ describe("lark chat members", () => {
                     return { data: { items: [] } };
                   },
                 },
-                message: {
-                  async list(payload) {
-                    observedHistoryCalls.push(payload);
-                    return { data: { items: [] } };
-                  },
-                },
               },
+            },
+            async request() {
+              return { data: { items: [] } };
             },
           },
         }),
@@ -178,7 +147,6 @@ describe("lark chat members", () => {
       chatId: "oc_target",
       pageSize: 5,
       pageToken: "members_page",
-      botHistoryLimit: 7,
     });
 
     assert.deepEqual(observedMemberCalls, [
@@ -191,7 +159,6 @@ describe("lark chat members", () => {
         },
       },
     ]);
-    assert.equal(observedHistoryCalls[0].params.page_size, 7);
   });
 
   it("rejects invalid page sizes before calling Feishu", async () => {
@@ -211,12 +178,10 @@ describe("lark chat members", () => {
                     called = true;
                   },
                 },
-                message: {
-                  async list() {
-                    called = true;
-                  },
-                },
               },
+            },
+            async request() {
+              called = true;
             },
           },
         }),
@@ -226,12 +191,10 @@ describe("lark chat members", () => {
     for (const input of [
       { pageSize: 0 },
       { pageSize: MAX_CHAT_MEMBERS_PAGE_SIZE + 1 },
-      { botHistoryLimit: -1 },
-      { botHistoryLimit: MAX_CHAT_MEMBERS_BOT_HISTORY_LIMIT + 1 },
     ]) {
       await assert.rejects(
         () => client.getChatMembers({ chatId: "oc_target", ...input }),
-        /pageSize|botHistoryLimit/,
+        /pageSize/,
       );
     }
 

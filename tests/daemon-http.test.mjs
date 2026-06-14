@@ -719,10 +719,17 @@ describe("daemon http server", () => {
             pageSize: input.pageSize,
             memberIdType: "open_id",
             members: [{ memberId: "ou_human", memberType: "user", name: "产品经理" }],
-            bots: [{ appId: "cli_other_bot", memberType: "bot", source: "recent_message_sender" }],
-            botCoverage: "partial",
-            botSources: ["recent_message_sender"],
-            notes: ["bot list is partial"],
+            bots: [
+              {
+                botId: "ou_bot",
+                openId: "ou_bot",
+                memberType: "bot",
+                source: "chat_member_bots_api",
+              },
+            ],
+            botCoverage: "direct",
+            botSources: ["chat_member_bots_api"],
+            notes: ["bot list is direct"],
             hasMore: false,
             pageToken: "",
           };
@@ -734,7 +741,6 @@ describe("daemon http server", () => {
 
       const result = await server.client.getChatMembers("thread_a", {
         pageSize: 20,
-        botHistoryLimit: 10,
       });
 
       assert.deepEqual(observedMemberRequests, [
@@ -742,12 +748,11 @@ describe("daemon http server", () => {
           chatId: "oc_target",
           pageSize: 20,
           pageToken: undefined,
-          botHistoryLimit: 10,
         },
       ]);
       assert.deepEqual(result.roster.members.map((member) => member.memberId), ["ou_human"]);
-      assert.deepEqual(result.roster.bots.map((bot) => bot.appId), ["cli_other_bot"]);
-      assert.equal(result.roster.botCoverage, "partial");
+      assert.deepEqual(result.roster.bots.map((bot) => bot.openId), ["ou_bot"]);
+      assert.equal(result.roster.botCoverage, "direct");
     } finally {
       await server.close();
     }
@@ -769,7 +774,6 @@ describe("daemon http server", () => {
       for (const input of [
         { pageSize: 0 },
         { pageToken: { bad: true } },
-        { botHistoryLimit: -1 },
       ]) {
         await assert.rejects(
           () => server.client.getChatMembers("thread_a", input),

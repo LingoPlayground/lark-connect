@@ -52,7 +52,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 - 不要对上下文里的历史消息调用 `lark_connect_ack_message`；只有 `wait` 或 `poll` 投递给当前会话的消息才需要 ack。
 - 如果需要 @ 人类同事或其他机器人，优先从上下文的 `sender` 或 `mentions` 字段里取得真实 `openId`；不要编造用户或机器人标识。
 
-需要查看聊天参与者时，调用 `lark_connect_get_chat_members`。它返回 `members` 和 `bots`：`members` 是群里的人类成员，`bots` 是当前应用和近期聊天消息里可识别到的机器人或应用发送者。机器人列表不是完整枚举；飞书群成员接口不会完整返回机器人。如果目标机器人不在列表里，先从近期上下文里找它的发言，或者让用户确认该机器人已经在群里发过消息。
+需要查看聊天参与者时，调用 `lark_connect_get_chat_members`。它返回 `members` 和 `bots`：`members` 是群里的人类成员，`bots` 来自飞书 `/open-apis/im/v1/chats/{chat_id}/members/bots` 接口。机器人结果里的 `openId` 是机器人的 open_id，可以作为发送消息时的 @ 目标。
 
 ## 发送
 
@@ -67,7 +67,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 需要 @ 人类同事或其他机器人时，在 `lark_connect_send_message` 里传入 `mentions`，每项至少包含 `openId`，可选 `name` 和 `isBot`。如果只是想提醒某个对象，可以只传 `mentions` 不传 `text`。
 
-发送前如果不知道该 @ 谁，先调用 `lark_connect_get_chat_members` 获取候选成员；如果候选里没有目标机器人，再读 `lark_connect_get_chat_context` 或等待目标机器人发言后确认标识。
+发送前如果不知道该 @ 谁，先调用 `lark_connect_get_chat_members` 获取候选成员和群内机器人；如果用户提到的对象不在结果里，再读 `lark_connect_get_chat_context` 确认是否有历史提及或发言。
 
 ## 短等待
 
