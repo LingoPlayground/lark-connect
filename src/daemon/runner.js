@@ -1,5 +1,6 @@
 import { createDaemonRuntime } from "./runtime.js";
 import { createDaemonHttpServer } from "./http-server.js";
+import { createJsonlLogger } from "./logger.js";
 import { createLarkChannelRunner } from "../lark/channel-runner.js";
 import { createLarkChatContextClient } from "../lark/chat-context.js";
 import { createLarkChatMembersClient } from "../lark/chat-members.js";
@@ -17,6 +18,7 @@ export async function startDaemon(config, options = {}) {
     options.runtime ??
     createDaemonRuntime({
       idleTimeoutMs: config.daemonIdleTimeoutMs,
+      logger: options.logger ?? createJsonlLogger(),
     });
   const channelRunner =
     options.channelRunner ??

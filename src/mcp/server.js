@@ -386,12 +386,15 @@ async function handleToolCall(params, runtime) {
     }
 
     if (params?.name === "lark_connect_poll_messages") {
-      return jsonResult(await client.pollMessages(args.agentSessionId));
+      return jsonResult(await client.pollMessages(args.agentSessionId, { clientKind: "mcp" }));
     }
 
     if (params?.name === "lark_connect_wait_messages") {
       return jsonResult(
-        await client.waitForMessages(args.agentSessionId, { timeoutMs: args.timeoutMs }),
+        await client.waitForMessages(args.agentSessionId, {
+          timeoutMs: args.timeoutMs,
+          clientKind: "mcp",
+        }),
       );
     }
 

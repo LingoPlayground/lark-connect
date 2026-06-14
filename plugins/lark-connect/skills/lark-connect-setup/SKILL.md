@@ -58,6 +58,12 @@ npx -y curiosea-lark-connect@latest daemon start
 npx -y curiosea-lark-connect@latest daemon status
 ```
 
+排查监听或投递时查看最近结构化日志：
+
+```bash
+npx -y curiosea-lark-connect@latest logs --tail 50
+```
+
 ## 规则
 
 - 不要把应用密钥回显给用户。

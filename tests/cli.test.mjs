@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -216,7 +216,7 @@ describe("cli wait", () => {
 
     assert.deepEqual(observedClientOptions, { host: "127.0.0.1", port: 6000 });
     assert.equal(observedAgentSessionId, "session_1");
-    assert.deepEqual(observedWaitOptions, { timeoutMs: 300000 });
+    assert.deepEqual(observedWaitOptions, { timeoutMs: 300000, clientKind: "cli" });
     assert.deepEqual(JSON.parse(stdout), { messages: [{ id: "om_1" }] });
     assert.equal(exitCode, 0);
   });
@@ -235,7 +235,7 @@ describe("cli wait", () => {
       exit() {},
     });
 
-    assert.deepEqual(observedWaitOptions, { timeoutMs: 300000 });
+    assert.deepEqual(observedWaitOptions, { timeoutMs: 300000, clientKind: "cli" });
   });
 
   it("requires an agent session id before waiting", async () => {
@@ -290,6 +290,32 @@ describe("cli wait", () => {
 
     assert.match(output.read(), /Requires a running daemon/);
     assert.match(output.read(), /same agentSessionId used with lark_connect_bind_session/);
+  });
+});
+
+describe("cli logs", () => {
+  it("prints recent structured daemon log entries", async () => {
+    const logFile = join(await mkdtemp(join(tmpdir(), "lark-connect-logs-")), "daemon.jsonl");
+    const output = createStdout();
+    await writeFile(
+      logFile,
+      [
+        JSON.stringify({ event: "old", messageId: "om_old" }),
+        JSON.stringify({ event: "new", messageId: "om_new" }),
+        "",
+      ].join("\n"),
+    );
+
+    await main(["logs", "--file", logFile, "--tail", "1"], {
+      stdout: output.stdout,
+    });
+
+    assert.deepEqual(JSON.parse(output.read()), [
+      {
+        event: "new",
+        messageId: "om_new",
+      },
+    ]);
   });
 });
 

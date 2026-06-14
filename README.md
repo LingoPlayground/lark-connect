@@ -90,6 +90,12 @@ npx -y curiosea-lark-connect@latest daemon start
 npx -y curiosea-lark-connect@latest daemon status
 ```
 
+排查监听和投递时可以查看最近的结构化日志：
+
+```bash
+npx -y curiosea-lark-connect@latest logs --tail 50
+```
+
 需要停止时：
 
 ```bash
@@ -131,17 +137,19 @@ npx -y curiosea-lark-connect@latest daemon stop
 
 ### 长时间等待聊天消息
 
-短等待用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`。如果 1 分钟没有消息，不要把超时当作监听结束；后续只有两个选择：继续调用 `lark_connect_wait_messages` 做下一轮短等待，或者建立约 5 分钟的心跳。
+短等待用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`。如果 1 分钟没有消息，不要把超时当作监听结束；活跃会话里优先继续调用 `lark_connect_wait_messages` 做下一轮短等待。只有当前会话可能无人值守时，才建立约 5 分钟的心跳。
 
 Codex 应使用 thread automation（线程自动化）定时唤醒，约 5 分钟后先调用 `lark_connect_poll_messages`。如果有消息，处理、回复、ack 后再做 1 分钟短等待；如果没有消息，继续下一轮心跳或改用短等待。
 
-Claude Code 应使用 background shell（后台 shell）：
+Claude Code 在无人值守心跳场景可以使用 background shell（后台 shell）：
 
 ```bash
 npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000
 ```
 
-`agentSessionId` 必须和 `lark_connect_bind_session` 里传入的是同一个值。
+`agentSessionId` 必须和 `lark_connect_bind_session` 里传入的是同一个值。这个命令会在收到消息或超时后把 JSON 结果输出到标准输出；如果 Claude Code 的后台 shell 把输出写入文件，需要读取该文件才能处理返回消息。活跃对话里不要用它替代 `lark_connect_wait_messages`。
+
+`lark_connect_wait_messages` 和 `lark_connect_poll_messages` 的返回体会包含 `diagnostics`，其中有调用来源、投递来源、等待前后的队列计数和已投递消息 ID。排查时可以结合 `npx -y curiosea-lark-connect@latest logs --tail 50` 判断消息是否进了守护进程、是否被 MCP 等待或 CLI 等待领取。
 
 ### 发送回复和 @
 
@@ -163,7 +171,7 @@ npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 
 src/cli.js                  命令行入口
 src/config.js               本地配置读写和运行时配置解析
 src/lark/                   飞书长连接、消息、聊天上下文、群成员、reaction（反应）、资源下载和连通性检查
-src/daemon/                 本地守护进程、HTTP 接口和内存路由状态
+src/daemon/                 本地守护进程、HTTP 接口、结构化日志和内存路由状态
 src/mcp/server.js           MCP 标准输入输出服务和工具定义
 plugins/lark-connect/       Codex 和 Claude Code 共用的插件载荷
 tests/                      node:test 测试
@@ -200,6 +208,7 @@ flowchart LR
 - `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` 仍可作为运行时覆盖，但正式安装优先使用 `setup` 写入的本地配置。
 - `LARK_CONNECT_DAEMON_PORT` 可以覆盖本地守护进程端口，默认是 `51745`。
 - 绑定、消息队列和去重状态都只在守护进程内存里保存，进程重启后丢失；搜索结果只随单次请求返回。
+- 守护进程诊断日志默认写到 `~/.local/state/curiosea-lark-connect/daemon.jsonl`，可以用 `curiosea-lark-connect logs --tail 50` 查看。
 - 未绑定单聊挑战消息只在守护进程内存里短暂保留，最多 5 分钟或 50 条；替换绑定会清空旧等待者和这部分缓冲。
 - 当前不持久化 `thread_id` 或 `root_id`，它们只作为飞书消息元数据保留。
 
@@ -254,6 +263,7 @@ node src/cli.js --help
 node src/cli.js setup
 node src/cli.js doctor --live
 node src/cli.js daemon start --foreground
+node src/cli.js logs --tail 50
 node src/cli.js mcp
 ```
 

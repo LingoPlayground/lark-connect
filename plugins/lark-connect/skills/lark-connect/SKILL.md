@@ -91,6 +91,8 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 群聊只有明确提及机器人的消息会被路由给智能体。已绑定单聊不要求提及机器人。立即检查时可以用 `lark_connect_poll_messages`。
 
+`lark_connect_wait_messages` 和 `lark_connect_poll_messages` 返回的 `diagnostics` 可用于排查监听问题。重点看 `deliverySource` 区分是 MCP 短等待、MCP 轮询还是 CLI 等待领取了消息；看 `queueBefore` 和 `queueAfter` 判断消息是否已经进入队列、是否已被投递。如果怀疑守护进程没有收到飞书事件，再用 `npx -y curiosea-lark-connect@latest logs --tail 50` 查看结构化日志。
+
 如果等待返回消息：
 
 1. 阅读消息和资源列表。
@@ -102,10 +104,10 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 ## 长时间监听
 
-如果 `lark_connect_wait_messages` 等待 1 分钟后超时，不要把它当作任务完成。当前会话可能已经进入无人值守状态，除非有人从会话里明确告知停止，否则只有两个选项：继续调用 `lark_connect_wait_messages` 做下一轮短等待，或者建立一个约 5 分钟的心跳。
+如果 `lark_connect_wait_messages` 等待 1 分钟后超时，不要把它当作任务完成。活跃会话里优先继续调用 `lark_connect_wait_messages` 做下一轮短等待。只有当前会话可能已经进入无人值守状态时，才建立一个约 5 分钟的心跳。此时只有两个选项：继续短等待，或者建立心跳。除非有人从会话里明确告知停止，否则不要结束监听。
 
 - Codex：使用 thread automation 创建约 5 分钟后的定时唤醒。唤醒后先 `poll`，有消息就处理、回复、ack，然后再做一次 1 分钟 `wait`。如果 `poll` 仍然没有消息，继续建立下一轮约 5 分钟心跳，或者改用 `lark_connect_wait_messages` 做下一轮短等待。
-- Claude Code：使用 background shell 运行 `npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000`。`agentSessionId` 必须复用本技能绑定步骤中传给 `lark_connect_bind_session` 的同一个值，不要改用未确认的运行时变量。命令结束后 Claude Code 会唤醒当前智能体；如果输出里有消息，就处理、回复、ack，然后再做一次 1 分钟 `wait`。如果输出里没有消息，再启动下一轮 background shell。
+- Claude Code：无人值守心跳场景可以使用 background shell 运行 `npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000`。`agentSessionId` 必须复用本技能绑定步骤中传给 `lark_connect_bind_session` 的同一个值，不要改用未确认的运行时变量。命令结束后 Claude Code 会唤醒当前智能体；如果输出里有消息，就处理、回复、ack，然后再做一次 1 分钟 `wait`。如果输出里没有消息，回到两个选项：继续调用 `lark_connect_wait_messages`，或再次建立约 5 分钟心跳。活跃会话里不要用 background shell 替代 MCP 短等待。
 
 ## 错误处理
 

@@ -4,11 +4,12 @@ import assert from "node:assert/strict";
 import { DAEMON_ERROR_CODES } from "../src/daemon/errors.js";
 import { createDaemonRuntime } from "../src/daemon/runtime.js";
 
-function createTestRuntime() {
+function createTestRuntime(options = {}) {
   let now = 1_000;
   const runtime = createDaemonRuntime({
     idleTimeoutMs: 3_600_000,
     now: () => now,
+    ...options,
   });
 
   return {
@@ -352,6 +353,57 @@ describe("daemon runtime messages", () => {
     const messages = await runtime.waitForMessages("thread_a", { timeoutMs: 0 });
 
     assert.deepEqual(messages, []);
+  });
+
+  it("writes structured events for binding, delivery, waits, and acknowledgments", async () => {
+    const events = [];
+    const { runtime } = createTestRuntime({
+      logger: {
+        write(event, details) {
+          events.push({ event, ...details });
+        },
+      },
+    });
+    runtime.bindSession(binding());
+
+    const pending = runtime.waitForMessages("thread_a", {
+      timeoutMs: 1_000,
+      deliverySource: "mcp_wait",
+    });
+    runtime.receiveLarkMessage(larkMessage({ messageId: "om_logged" }));
+    await pending;
+    runtime.ackMessage("om_logged", { agentSessionId: "thread_a" });
+
+    assert.deepEqual(
+      events.map((entry) => entry.event),
+      [
+        "binding_created",
+        "wait_registered",
+        "lark_event_received",
+        "message_enqueued",
+        "message_delivered",
+        "wait_resolved",
+        "message_acknowledged",
+      ],
+    );
+    assert.deepEqual(
+      events.find((entry) => entry.event === "message_delivered"),
+      {
+        event: "message_delivered",
+        agentSessionId: "thread_a",
+        deliverySource: "mcp_wait",
+        messageIds: ["om_logged"],
+      },
+    );
+    assert.deepEqual(
+      events.find((entry) => entry.event === "wait_resolved"),
+      {
+        event: "wait_resolved",
+        agentSessionId: "thread_a",
+        deliverySource: "mcp_wait",
+        messageIds: ["om_logged"],
+      },
+    );
   });
 
   it("reports an unbound session before polling, waiting, or acknowledging", () => {
