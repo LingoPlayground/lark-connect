@@ -882,6 +882,48 @@ describe("daemon http server", () => {
     }
   });
 
+  it("sends a mention-only text message to the chat bound to an agent session", async () => {
+    const observedMessages = [];
+    const server = await createTestServer({
+      messageClient: {
+        async sendTextMessage(input) {
+          observedMessages.push(input);
+          return {
+            ...input,
+            messageId: "om_mention_only",
+          };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      const result = await server.client.sendMessage("thread_a", {
+        mentions: [{ openId: "ou_pm", name: "产品经理" }],
+      });
+
+      assert.deepEqual(observedMessages, [
+        {
+          chatId: "oc_target",
+          text: "",
+          mentions: [{ openId: "ou_pm", name: "产品经理" }],
+          replyToMessageId: undefined,
+          replyInThread: undefined,
+        },
+      ]);
+      assert.deepEqual(result.message, {
+        id: "om_mention_only",
+        larkMessageId: "om_mention_only",
+        chatId: "oc_target",
+        agentSessionId: "thread_a",
+        text: "",
+        mentions: [{ openId: "ou_pm", name: "产品经理" }],
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
   it("does not send a text message when the agent session is not bound", async () => {
     const observedMessages = [];
     const server = await createTestServer({
@@ -1206,6 +1248,32 @@ describe("daemon http server", () => {
 
       for (const call of [
         () => server.client.sendMessage("thread_a", { text: "   " }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: "ou_pm",
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: [null],
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: [{}],
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: [{ openId: "ou_pm", isBot: "yes" }],
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: [{ openId: "ou_bad\" onclick=\"x" }],
+          }),
+        () =>
+          server.client.sendMessage("thread_a", {
+            mentions: Array.from({ length: 21 }, (_, index) => ({
+              openId: `ou_${index}`,
+            })),
+          }),
         () => server.client.sendFile("thread_a", { filePath: "" }),
         () => server.client.sendImage("thread_a", { imagePath: "" }),
         () =>

@@ -158,6 +158,86 @@ describe("lark messages", () => {
     );
   });
 
+  it("rejects unsafe mention tags before sending", async () => {
+    const observedCalls = [];
+    const client = await createLarkMessageClient(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+      },
+      {
+        channelFactory: async () => ({
+          async send(to, input, options) {
+            observedCalls.push({ to, input, options });
+            return { messageId: "om_unsafe" };
+          },
+        }),
+      },
+    );
+
+    for (const mentions of [
+      [{ openId: "ou_bad\" onclick=\"x" }],
+      [{ openId: "ou_bad<at>" }],
+      [{ openId: "ou_bad space" }],
+      [{ openId: "ou_pm", name: "产品<经理>" }],
+      [{ openId: "ou_pm", name: "产品&经理" }],
+    ]) {
+      await assert.rejects(
+        () => client.sendTextMessage({ chatId: "oc_target", mentions }),
+        /mentions/,
+      );
+    }
+
+    assert.deepEqual(observedCalls, []);
+  });
+
+  it("rejects excessive mention counts and field lengths before sending", async () => {
+    const observedCalls = [];
+    const client = await createLarkMessageClient(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+      },
+      {
+        channelFactory: async () => ({
+          async send(to, input, options) {
+            observedCalls.push({ to, input, options });
+            return { messageId: "om_excessive" };
+          },
+        }),
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        client.sendTextMessage({
+          chatId: "oc_target",
+          mentions: Array.from({ length: 21 }, (_, index) => ({
+            openId: `ou_${index}`,
+          })),
+        }),
+      /mentions cannot include more than 20 targets/,
+    );
+    await assert.rejects(
+      () =>
+        client.sendTextMessage({
+          chatId: "oc_target",
+          mentions: [{ openId: `ou_${"a".repeat(129)}` }],
+        }),
+      /mentions.openId must be at most 128 characters/,
+    );
+    await assert.rejects(
+      () =>
+        client.sendTextMessage({
+          chatId: "oc_target",
+          mentions: [{ openId: "ou_pm", name: "a".repeat(81) }],
+        }),
+      /mentions.name must be at most 80 characters/,
+    );
+
+    assert.deepEqual(observedCalls, []);
+  });
+
   it("sends a local file to a chat and derives a display name", async () => {
     const observedCalls = [];
     const client = await createLarkMessageClient(

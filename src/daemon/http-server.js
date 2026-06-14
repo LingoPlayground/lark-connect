@@ -10,6 +10,7 @@ import {
   MAX_CHAT_MEMBERS_PAGE_SIZE,
 } from "../lark/chat-members.js";
 import { MAX_CHAT_SEARCH_PAGE_SIZE } from "../lark/chats.js";
+import { normalizeOptionalMentions } from "../lark/mentions.js";
 import { DEFAULT_ACK_REACTION_EMOJI_TYPE } from "../lark/reactions.js";
 import { createDaemonRuntime } from "./runtime.js";
 import { DAEMON_ERROR_CODES, DaemonRuntimeError } from "./errors.js";
@@ -339,35 +340,15 @@ function invalidRequest(message, details) {
   throw error;
 }
 
-function normalizeMentionTarget(target) {
-  if (!target || typeof target !== "object" || Array.isArray(target)) {
-    invalidRequest("mentions items must be objects");
-  }
-
-  const openId = String(target.openId ?? target.open_id ?? "").trim();
-  if (!openId) invalidRequest("mentions.openId is required");
-
-  const mention = { openId };
-  const name = String(target.name ?? "").trim();
-  if (name) mention.name = name;
-  if (target.isBot !== undefined) {
-    if (typeof target.isBot !== "boolean") invalidRequest("mentions.isBot must be a boolean");
-    mention.isBot = target.isBot;
-  }
-  return mention;
-}
-
-function normalizeOptionalMentions(value) {
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value)) invalidRequest("mentions must be an array");
-  const mentions = value.map(normalizeMentionTarget);
-  return mentions.length > 0 ? mentions : undefined;
-}
-
 function normalizeSendTextBody(body) {
   const input = requireObjectBody(body);
   const text = String(input.text ?? "").trim();
-  const mentions = normalizeOptionalMentions(input.mentions);
+  let mentions;
+  try {
+    mentions = normalizeOptionalMentions(input.mentions);
+  } catch (error) {
+    invalidRequest(error.message);
+  }
   if (!text && !mentions) invalidRequest("text or mentions is required");
   return {
     text,

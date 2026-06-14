@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { basename } from "node:path";
 
 import { createDefaultLarkChannel } from "./channel.js";
+import { normalizeOptionalMentions } from "./mentions.js";
 
 function requireMessageConfig(config) {
   if (!config.appId) throw new Error("FEISHU_APP_ID is required for messages");
@@ -12,34 +13,9 @@ function normalizeOptionalText(text) {
   return String(text ?? "").trim();
 }
 
-function normalizeMentionTarget(target) {
-  if (!target || typeof target !== "object" || Array.isArray(target)) {
-    throw new Error("mentions items must be objects");
-  }
-
-  const openId = String(target.openId ?? target.open_id ?? "").trim();
-  if (!openId) throw new Error("mentions.openId is required");
-
-  const mention = { openId };
-  const name = String(target.name ?? "").trim();
-  if (name) mention.name = name;
-  if (target.isBot !== undefined) {
-    if (typeof target.isBot !== "boolean") throw new Error("mentions.isBot must be a boolean");
-    mention.isBot = target.isBot;
-  }
-  return mention;
-}
-
-function normalizeMentions(mentions) {
-  if (mentions === undefined) return undefined;
-  if (!Array.isArray(mentions)) throw new Error("mentions must be an array");
-  const normalized = mentions.map(normalizeMentionTarget);
-  return normalized.length > 0 ? normalized : undefined;
-}
-
 function normalizeTextMessageInput(input) {
   const text = normalizeOptionalText(input.text);
-  const mentions = normalizeMentions(input.mentions);
+  const mentions = normalizeOptionalMentions(input.mentions);
   if (!text && !mentions) throw new Error("text or mentions is required");
   return { text, mentions };
 }

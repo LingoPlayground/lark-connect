@@ -195,4 +195,66 @@ describe("lark chat context", () => {
     }
     assert.equal(called, false);
   });
+
+  it("times out when Feishu message history does not respond", async () => {
+    const client = await createLarkChatContextClient(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+      },
+      {
+        chatContextTimeoutMs: 1,
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {
+                message: {
+                  async list() {
+                    return new Promise(() => {});
+                  },
+                },
+              },
+            },
+          },
+        }),
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        Promise.race([
+          client.getChatContext({ chatId: "oc_target" }),
+          new Promise((_, reject) => {
+            setTimeout(
+              () => reject(new Error("test timed out waiting for client timeout")),
+              25,
+            );
+          }),
+        ]),
+      /Feishu chat context timed out after 1ms/,
+    );
+  });
+
+  it("reports an unavailable Feishu message history client", async () => {
+    const client = await createLarkChatContextClient(
+      {
+        appId: "cli_test",
+        appSecret: "secret",
+      },
+      {
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {},
+            },
+          },
+        }),
+      },
+    );
+
+    await assert.rejects(
+      () => client.getChatContext({ chatId: "oc_target" }),
+      /Feishu message history client is unavailable/,
+    );
+  });
 });

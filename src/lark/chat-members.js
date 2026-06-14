@@ -1,7 +1,9 @@
 import { createDefaultLarkChannel, requireLarkAppConfig } from "./channel.js";
+import { DEFAULT_LARK_REQUEST_TIMEOUT_MS, withTimeout } from "./timeouts.js";
 
 export const DEFAULT_CHAT_MEMBERS_PAGE_SIZE = 50;
 export const MAX_CHAT_MEMBERS_PAGE_SIZE = 100;
+const DEFAULT_CHAT_MEMBERS_TIMEOUT_MS = DEFAULT_LARK_REQUEST_TIMEOUT_MS;
 
 const BOT_COVERAGE_NOTE =
   "Feishu members/bots API returns bot open_id values for bots currently in the chat.";
@@ -78,6 +80,8 @@ export async function createLarkChatMembersClient(config, options = {}) {
 
   const channelFactory = options.channelFactory ?? createDefaultLarkChannel;
   const channel = await channelFactory(config);
+  const chatMembersTimeoutMs =
+    options.chatMembersTimeoutMs ?? DEFAULT_CHAT_MEMBERS_TIMEOUT_MS;
 
   return {
     async getChatMembers(input = {}) {
@@ -100,16 +104,24 @@ export async function createLarkChatMembersClient(config, options = {}) {
       };
       if (pageToken) memberParams.page_token = pageToken;
 
-      const memberResult = await chatMembersGet({
-        path: { chat_id: chatId },
-        params: memberParams,
-      });
+      const memberResult = await withTimeout(
+        chatMembersGet({
+          path: { chat_id: chatId },
+          params: memberParams,
+        }),
+        chatMembersTimeoutMs,
+        `Feishu chat members timed out after ${chatMembersTimeoutMs}ms`,
+      );
       const memberData = memberResult?.data ?? {};
       const members = (memberData.items ?? [])
         .map(normalizeMember)
         .filter((member) => member.memberId);
 
-      const botResult = await chatBotsGet(chatId);
+      const botResult = await withTimeout(
+        chatBotsGet(chatId),
+        chatMembersTimeoutMs,
+        `Feishu chat bots timed out after ${chatMembersTimeoutMs}ms`,
+      );
       const bots = (botResult?.data?.items ?? []).map(normalizeBot).filter(Boolean);
 
       return {

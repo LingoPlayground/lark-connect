@@ -1,7 +1,9 @@
 import { createDefaultLarkChannel, requireLarkAppConfig } from "./channel.js";
+import { DEFAULT_LARK_REQUEST_TIMEOUT_MS, withTimeout } from "./timeouts.js";
 
 export const DEFAULT_CHAT_CONTEXT_LIMIT = 10;
 export const MAX_CHAT_CONTEXT_LIMIT = 50;
+const DEFAULT_CHAT_CONTEXT_TIMEOUT_MS = DEFAULT_LARK_REQUEST_TIMEOUT_MS;
 
 function normalizeRequiredString(value, fieldName) {
   const text = String(value ?? "").trim();
@@ -85,6 +87,8 @@ export async function createLarkChatContextClient(config, options = {}) {
 
   const channelFactory = options.channelFactory ?? createDefaultLarkChannel;
   const channel = await channelFactory(config);
+  const chatContextTimeoutMs =
+    options.chatContextTimeoutMs ?? DEFAULT_CHAT_CONTEXT_TIMEOUT_MS;
 
   return {
     async getChatContext(input = {}) {
@@ -104,7 +108,11 @@ export async function createLarkChatContextClient(config, options = {}) {
       };
       if (pageToken) params.page_token = pageToken;
 
-      const result = await channel.rawClient.im.v1.message.list({ params });
+      const result = await withTimeout(
+        channel.rawClient.im.v1.message.list({ params }),
+        chatContextTimeoutMs,
+        `Feishu chat context timed out after ${chatContextTimeoutMs}ms`,
+      );
       const data = result?.data ?? {};
       const messages = (data.items ?? [])
         .map(normalizeMessage)

@@ -200,4 +200,139 @@ describe("lark chat members", () => {
 
     assert.equal(called, false);
   });
+
+  it("times out when Feishu chat members do not respond", async () => {
+    const client = await createLarkChatMembersClient(
+      {
+        appId: "cli_current",
+        appSecret: "secret",
+      },
+      {
+        chatMembersTimeoutMs: 1,
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {
+                chatMembers: {
+                  async get() {
+                    return new Promise(() => {});
+                  },
+                },
+              },
+            },
+            async request() {
+              return { data: { items: [] } };
+            },
+          },
+        }),
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        Promise.race([
+          client.getChatMembers({ chatId: "oc_target" }),
+          new Promise((_, reject) => {
+            setTimeout(
+              () => reject(new Error("test timed out waiting for member timeout")),
+              25,
+            );
+          }),
+        ]),
+      /Feishu chat members timed out after 1ms/,
+    );
+  });
+
+  it("times out when Feishu chat bots do not respond", async () => {
+    const client = await createLarkChatMembersClient(
+      {
+        appId: "cli_current",
+        appSecret: "secret",
+      },
+      {
+        chatMembersTimeoutMs: 1,
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {
+                chatMembers: {
+                  async get() {
+                    return { data: { items: [] } };
+                  },
+                },
+              },
+            },
+            async request() {
+              return new Promise(() => {});
+            },
+          },
+        }),
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        Promise.race([
+          client.getChatMembers({ chatId: "oc_target" }),
+          new Promise((_, reject) => {
+            setTimeout(
+              () => reject(new Error("test timed out waiting for bot timeout")),
+              25,
+            );
+          }),
+        ]),
+      /Feishu chat bots timed out after 1ms/,
+    );
+  });
+
+  it("reports unavailable Feishu chat member clients", async () => {
+    const missingMembersClient = await createLarkChatMembersClient(
+      {
+        appId: "cli_current",
+        appSecret: "secret",
+      },
+      {
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {},
+            },
+            async request() {
+              return { data: { items: [] } };
+            },
+          },
+        }),
+      },
+    );
+    await assert.rejects(
+      () => missingMembersClient.getChatMembers({ chatId: "oc_target" }),
+      /Feishu chat members client is unavailable/,
+    );
+
+    const missingBotsClient = await createLarkChatMembersClient(
+      {
+        appId: "cli_current",
+        appSecret: "secret",
+      },
+      {
+        channelFactory: async () => ({
+          rawClient: {
+            im: {
+              v1: {
+                chatMembers: {
+                  async get() {
+                    return { data: { items: [] } };
+                  },
+                },
+              },
+            },
+          },
+        }),
+      },
+    );
+    await assert.rejects(
+      () => missingBotsClient.getChatMembers({ chatId: "oc_target" }),
+      /Feishu chat bots client is unavailable/,
+    );
+  });
 });
