@@ -1,4 +1,5 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -19,6 +20,10 @@ function sanitizeLogFileName(value) {
     .replace(/^_+|_+$/g, "") || "unknown";
 }
 
+function shortStableHash(value) {
+  return createHash("sha256").update(String(value ?? "")).digest("hex").slice(0, 12);
+}
+
 export function getDaemonLogFilePath(options = {}) {
   return join(resolveLogDir(options), "daemon.jsonl");
 }
@@ -27,7 +32,7 @@ export function getSessionLogFilePath(agentSessionId, options = {}) {
   return join(
     resolveLogDir(options),
     "sessions",
-    `${sanitizeLogFileName(agentSessionId)}.jsonl`,
+    `${sanitizeLogFileName(agentSessionId)}-${shortStableHash(agentSessionId)}.jsonl`,
   );
 }
 

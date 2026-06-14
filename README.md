@@ -210,7 +210,7 @@ flowchart LR
 - `LARK_CONNECT_DAEMON_PORT` 可以覆盖本地守护进程端口，默认是 `51745`。
 - 绑定、消息队列和去重状态都只在守护进程内存里保存，进程重启后丢失；搜索结果只随单次请求返回。
 - 守护进程生命周期和未路由事件默认写到 `~/.local/state/curiosea-lark-connect/daemon.jsonl`，可以用 `curiosea-lark-connect logs --tail 50` 查看。
-- 绑定后的消息、等待和确认事件按会话写到 `~/.local/state/curiosea-lark-connect/sessions/<agentSessionId>.jsonl`，可以用 `curiosea-lark-connect logs --agent-session-id <id> --tail 50` 查看。
+- 绑定后的消息、等待和确认事件按会话写到 `~/.local/state/curiosea-lark-connect/sessions/` 下，文件名由 `agentSessionId` 安全化后加短哈希得到；建议用 `curiosea-lark-connect logs --agent-session-id <id> --tail 50` 查看，不需要手工拼文件名。
 - 未绑定单聊挑战消息只在守护进程内存里短暂保留，最多 5 分钟或 50 条；替换绑定会清空旧等待者和这部分缓冲。
 - 当前不持久化 `thread_id` 或 `root_id`，它们只作为飞书消息元数据保留。
 

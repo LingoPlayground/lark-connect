@@ -97,6 +97,13 @@ describe("daemon logger", () => {
         },
       ],
     );
-    assert.match(getSessionLogFilePath("thread/a:b", { logDir }), /thread_a_b\.jsonl$/);
+    assert.match(
+      getSessionLogFilePath("thread/a:b", { logDir }),
+      /thread_a_b-[a-f0-9]{12}\.jsonl$/,
+    );
+    assert.notEqual(
+      getSessionLogFilePath("thread/a:b", { logDir }),
+      getSessionLogFilePath("thread_a_b", { logDir }),
+    );
   });
 });
