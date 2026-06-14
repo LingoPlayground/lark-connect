@@ -355,6 +355,20 @@ describe("daemon runtime messages", () => {
     assert.deepEqual(messages, []);
   });
 
+  it("rejects invalid wait timeouts before registering a waiter", () => {
+    const { runtime } = createTestRuntime();
+    runtime.bindSession(binding());
+
+    for (const timeoutMs of [NaN, Infinity, 2_147_483_648, -1]) {
+      assert.throws(
+        () => runtime.waitForMessages("thread_a", { timeoutMs }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.details?.field === "timeoutMs",
+      );
+    }
+  });
+
   it("writes structured events for binding, delivery, waits, and acknowledgments", async () => {
     const events = [];
     const { runtime } = createTestRuntime({

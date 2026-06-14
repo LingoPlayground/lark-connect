@@ -296,7 +296,8 @@ describe("cli wait", () => {
 
 describe("cli logs", () => {
   it("prints recent structured daemon log entries", async () => {
-    const logFile = join(await mkdtemp(join(tmpdir(), "lark-connect-logs-")), "daemon.jsonl");
+    const logDir = await mkdtemp(join(tmpdir(), "lark-connect-logs-"));
+    const logFile = join(logDir, "daemon.jsonl");
     const output = createStdout();
     await writeFile(
       logFile,
@@ -307,7 +308,8 @@ describe("cli logs", () => {
       ].join("\n"),
     );
 
-    await main(["logs", "--file", logFile, "--tail", "1"], {
+    await main(["logs", "--tail", "1"], {
+      logDir,
       stdout: output.stdout,
     });
 
@@ -338,12 +340,11 @@ describe("cli logs", () => {
         "logs",
         "--agent-session-id",
         "thread/a:b",
-        "--log-dir",
-        logRoot,
         "--tail",
         "1",
       ],
       {
+        logDir: logRoot,
         stdout: output.stdout,
       },
     );

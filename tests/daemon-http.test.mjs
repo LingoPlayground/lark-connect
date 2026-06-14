@@ -489,6 +489,73 @@ describe("daemon http server", () => {
     }
   });
 
+  it("marks missing or unsupported client kinds as unknown diagnostics", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+
+      server.runtime.receiveLarkMessage(larkMessage({ messageId: "om_unknown_poll" }));
+      const polled = await server.client.pollMessages("thread_a");
+      assert.equal(polled.diagnostics.clientKind, "unknown");
+      assert.equal(polled.diagnostics.deliverySource, "unknown_poll");
+
+      const response = await fetch(
+        `http://${server.address.host}:${server.address.port}/sessions/thread_a/messages/wait?timeout_ms=0&client_kind=browser`,
+      );
+      const waited = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(waited.diagnostics.clientKind, "unknown");
+      assert.equal(waited.diagnostics.deliverySource, "unknown_wait");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("returns an empty wait result when the session is replaced while waiting", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+
+      const pending = server.client.waitForMessages("thread_a", {
+        timeoutMs: 1_000,
+        clientKind: "mcp",
+      });
+      await server.client.bindSession(
+        binding({
+          chatId: "oc_replacement",
+          agentSessionId: "thread_b",
+          replace: true,
+        }),
+      );
+
+      const result = await pending;
+
+      assert.deepEqual(result.messages, []);
+      assert.equal(result.diagnostics.result, "timeout");
+      assert.equal(result.diagnostics.queueAfter.sessionBound, false);
+      assert.equal(result.diagnostics.queueAfter.agentSessionId, "thread_a");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid wait timeout query values", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () => server.client.waitForMessages("thread_a", { timeoutMs: "not-a-number" }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          error?.details?.field === "timeoutMs",
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   it("routes bound direct messages without requiring a bot mention", async () => {
     const server = await createTestServer();
     try {

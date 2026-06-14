@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import {
   createJsonlLogger,
@@ -105,5 +105,34 @@ describe("daemon logger", () => {
       getSessionLogFilePath("thread/a:b", { logDir }),
       getSessionLogFilePath("thread_a_b", { logDir }),
     );
+  });
+
+  it("keeps long session log file names bounded", () => {
+    const longSessionId = "thread_".repeat(100);
+    assert.ok(basename(getSessionLogFilePath(longSessionId)).length < 140);
+  });
+
+  it("reports the file and line number for invalid JSONL entries", async () => {
+    const logFile = join(await mkdtemp(join(tmpdir(), "lark-connect-bad-log-")), "daemon.jsonl");
+    await writeFile(
+      logFile,
+      [
+        JSON.stringify({ event: "valid" }),
+        "{",
+        "",
+      ].join("\n"),
+    );
+
+    assert.throws(
+      () => readJsonlLog({ filePath: logFile }),
+      new RegExp(`${logFile}.*line 2`),
+    );
+  });
+
+  it("returns an empty list when the requested log file does not exist", async () => {
+    const logDir = await mkdtemp(join(tmpdir(), "lark-connect-missing-log-"));
+
+    assert.deepEqual(readJsonlLog({ logDir }), []);
+    assert.deepEqual(readJsonlLog({ logDir, agentSessionId: "thread_missing" }), []);
   });
 });

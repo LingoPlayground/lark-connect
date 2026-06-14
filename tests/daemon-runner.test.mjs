@@ -76,6 +76,58 @@ describe("daemon runner", () => {
     }
   });
 
+  it("logs daemon startup failures before rethrowing them", async () => {
+    const events = [];
+    const startupError = new Error("channel failed");
+
+    await assert.rejects(
+      () =>
+        startDaemon(
+          {
+            appId: "cli_test",
+            appSecret: "secret",
+            chatId: "oc_target",
+            daemonHost: "127.0.0.1",
+            daemonPort: 0,
+            daemonIdleTimeoutMs: 3_600_000,
+          },
+          {
+            logger: {
+              write(event, details) {
+                events.push({ event, ...details });
+              },
+            },
+            channelRunner: {
+              async start() {
+                throw startupError;
+              },
+              async stop() {},
+            },
+            httpServer: {
+              async listen() {
+                throw new Error("http should not listen after channel failure");
+              },
+              async close() {},
+            },
+          },
+        ),
+      startupError,
+    );
+
+    assert.deepEqual(events, [
+      {
+        event: "daemon_starting",
+        host: "127.0.0.1",
+        port: 0,
+        idleTimeoutMs: 3_600_000,
+      },
+      {
+        event: "daemon_start_failed",
+        message: "channel failed",
+      },
+    ]);
+  });
+
   it("wires an injected reaction client into acknowledgments", async () => {
     const channelRunner = createFakeChannelRunner();
     const observedReactions = [];

@@ -304,20 +304,13 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
   }
 
   if (command === "logs") {
-    const logDir = hasOption(argv, "--log-dir")
-      ? readRequiredOptionValue(argv, "--log-dir")
-      : undefined;
+    const logDir = runtime.logDir;
     const agentSessionId = hasOption(argv, "--agent-session-id")
       ? readRequiredOptionValue(argv, "--agent-session-id")
       : undefined;
-    let filePath;
-    if (hasOption(argv, "--file")) {
-      filePath = readRequiredOptionValue(argv, "--file");
-    } else if (agentSessionId) {
-      filePath = getSessionLogFilePath(agentSessionId, { logDir });
-    } else {
-      filePath = getDaemonLogFilePath({ logDir });
-    }
+    const filePath = agentSessionId
+      ? getSessionLogFilePath(agentSessionId, { logDir })
+      : getDaemonLogFilePath({ logDir });
     const tail = readIntegerOption(argv, "--tail", 100, { min: 1, max: 10_000 });
     stdout.write(`${JSON.stringify(readJsonlLog({ filePath, tail }), null, 2)}\n`);
     return;

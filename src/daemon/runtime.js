@@ -1,5 +1,4 @@
 import { DAEMON_ERROR_CODES, DaemonRuntimeError } from "./errors.js";
-import { createNoopLogger } from "./logger.js";
 
 const DEFAULT_IDLE_TIMEOUT_MS = 3_600_000;
 const DEFAULT_DIRECT_CHAT_SIGNAL_TIMEOUT_MS = 60_000;
@@ -21,7 +20,7 @@ function countMessages(messages, status) {
 
 export function createDaemonRuntime(options = {}) {
   const now = options.now ?? (() => Date.now());
-  const logger = options.logger ?? createNoopLogger();
+  const logger = options.logger ?? { write() {} };
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const directChatSignalBufferTtlMs =
     options.directChatSignalBufferTtlMs ?? DEFAULT_DIRECT_CHAT_SIGNAL_BUFFER_TTL_MS;
@@ -526,7 +525,7 @@ export function createDaemonRuntime(options = {}) {
         return Promise.resolve(messages);
       }
 
-      const timeoutMs = options.timeoutMs ?? 30_000;
+      const timeoutMs = normalizeTimeoutMs(options.timeoutMs, 30_000);
       if (timeoutMs <= 0) {
         writeLog("wait_timeout", {
           agentSessionId,

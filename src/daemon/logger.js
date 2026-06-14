@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 const DEFAULT_LOG_TAIL = 100;
+const MAX_SESSION_LOG_PREFIX_LENGTH = 96;
 
 export function getDaemonLogDir() {
   return join(homedir(), ".local", "state", "curiosea-lark-connect");
@@ -14,10 +15,11 @@ function resolveLogDir(options = {}) {
 }
 
 function sanitizeLogFileName(value) {
-  return String(value ?? "")
+  const prefix = String(value ?? "")
     .trim()
     .replace(/[^A-Za-z0-9._-]+/g, "_")
     .replace(/^_+|_+$/g, "") || "unknown";
+  return prefix.slice(0, MAX_SESSION_LOG_PREFIX_LENGTH);
 }
 
 function shortStableHash(value) {
@@ -97,7 +99,17 @@ export function readJsonlLog(options = {}) {
 
   return text
     .split("\n")
-    .filter((line) => line.trim())
+    .map((line, index) => ({ line, lineNumber: index + 1 }))
+    .filter((entry) => entry.line.trim())
     .slice(-tail)
-    .map((line) => JSON.parse(line));
+    .map((entry) => {
+      try {
+        return JSON.parse(entry.line);
+      } catch (cause) {
+        throw new Error(
+          `daemon log ${filePath} contains invalid JSON on line ${entry.lineNumber}`,
+          { cause },
+        );
+      }
+    });
 }

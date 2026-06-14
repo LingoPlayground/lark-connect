@@ -235,6 +235,27 @@ function createMessageDiagnostics(input) {
   };
 }
 
+function safeSessionDiagnostics(runtime, agentSessionId) {
+  try {
+    return {
+      sessionBound: true,
+      ...runtime.getSessionDiagnostics(agentSessionId),
+    };
+  } catch (error) {
+    if (error instanceof DaemonRuntimeError && error.code === DAEMON_ERROR_CODES.SESSION_NOT_BOUND) {
+      return {
+        sessionBound: false,
+        agentSessionId,
+        pendingCount: 0,
+        deliveredCount: 0,
+        acknowledgedCount: 0,
+        waiterCount: 0,
+      };
+    }
+    throw error;
+  }
+}
+
 function requireBoundChat(runtime, agentSessionId) {
   const binding = runtime
     .getStatus()
@@ -762,14 +783,14 @@ export function createDaemonHttpServer(options = {}) {
         const clientKind = normalizeClientKind(url.searchParams.get("client_kind"));
         const operation = messagesRoute.wait ? "wait" : "poll";
         const deliverySource = createDeliverySource(clientKind, operation);
-        const queueBefore = runtime.getSessionDiagnostics(messagesRoute.agentSessionId);
+        const queueBefore = safeSessionDiagnostics(runtime, messagesRoute.agentSessionId);
         if (messagesRoute.wait) {
           const timeoutMs = Number(url.searchParams.get("timeout_ms") ?? 30_000);
           const messages = await runtime.waitForMessages(messagesRoute.agentSessionId, {
             timeoutMs,
             deliverySource,
           });
-          const queueAfter = runtime.getSessionDiagnostics(messagesRoute.agentSessionId);
+          const queueAfter = safeSessionDiagnostics(runtime, messagesRoute.agentSessionId);
           sendJson(
             response,
             200,
@@ -792,7 +813,7 @@ export function createDaemonHttpServer(options = {}) {
         }
 
         const messages = runtime.pollMessages(messagesRoute.agentSessionId, { deliverySource });
-        const queueAfter = runtime.getSessionDiagnostics(messagesRoute.agentSessionId);
+        const queueAfter = safeSessionDiagnostics(runtime, messagesRoute.agentSessionId);
         sendJson(response, 200, {
           messages,
           diagnostics: createMessageDiagnostics({

@@ -150,7 +150,7 @@ npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 
 
 `agentSessionId` 必须和 `lark_connect_bind_session` 里传入的是同一个值。这个命令会在收到消息或超时后把 JSON 结果输出到标准输出；如果 Claude Code 的后台 shell 把输出写入文件，需要读取该文件才能处理返回消息。活跃对话里不要用它替代 `lark_connect_wait_messages`。
 
-`lark_connect_wait_messages` 和 `lark_connect_poll_messages` 的返回体会包含 `diagnostics`，其中有调用来源、投递来源、等待前后的队列计数和已投递消息 ID。排查时优先看当前会话日志：`npx -y curiosea-lark-connect@latest logs --agent-session-id <绑定时使用的 agentSessionId> --tail 50`，判断消息是否进入该会话队列、是否被 MCP 等待或 CLI 等待领取。如果会话日志里没有对应事件，再看 daemon 日志：`npx -y curiosea-lark-connect@latest logs --tail 50`，判断守护进程是否启动、是否收到未绑定或未路由事件。
+`lark_connect_wait_messages` 和 `lark_connect_poll_messages` 的返回体会包含 `diagnostics`，其中有调用来源、投递来源、等待前后的队列计数和已投递消息 ID。排查时优先看当前会话日志：`npx -y curiosea-lark-connect@latest logs --agent-session-id <绑定时使用的 agentSessionId> --tail 50`，判断消息是否进入该会话队列、是否被 MCP 等待或 CLI 等待领取，也能看到已绑定聊天里未提及机器人等路由决策。如果会话日志里没有对应事件，再看 daemon 日志：`npx -y curiosea-lark-connect@latest logs --tail 50`，判断守护进程是否启动、是否收到未绑定聊天事件或单聊发现事件。
 
 ### 发送回复和 @
 
@@ -209,7 +209,7 @@ flowchart LR
 - `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` 仍可作为运行时覆盖，但正式安装优先使用 `setup` 写入的本地配置。
 - `LARK_CONNECT_DAEMON_PORT` 可以覆盖本地守护进程端口，默认是 `51745`。
 - 绑定、消息队列和去重状态都只在守护进程内存里保存，进程重启后丢失；搜索结果只随单次请求返回。
-- 守护进程生命周期和未路由事件默认写到 `~/.local/state/curiosea-lark-connect/daemon.jsonl`，可以用 `curiosea-lark-connect logs --tail 50` 查看。
+- 守护进程生命周期、未绑定聊天事件和单聊发现事件默认写到 `~/.local/state/curiosea-lark-connect/daemon.jsonl`，可以用 `curiosea-lark-connect logs --tail 50` 查看。
 - 绑定后的消息、等待和确认事件按会话写到 `~/.local/state/curiosea-lark-connect/sessions/` 下，文件名由 `agentSessionId` 安全化后加短哈希得到；建议用 `curiosea-lark-connect logs --agent-session-id <id> --tail 50` 查看，不需要手工拼文件名。
 - 未绑定单聊挑战消息只在守护进程内存里短暂保留，最多 5 分钟或 50 条；替换绑定会清空旧等待者和这部分缓冲。
 - 当前不持久化 `thread_id` 或 `root_id`，它们只作为飞书消息元数据保留。
