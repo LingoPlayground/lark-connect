@@ -100,6 +100,7 @@
 - CLI（Command Line Interface，命令行接口）行为变化要同步更新 `tests/cli.test.mjs`，MCP 工具变化要同步更新 `tests/mcp*.test.mjs`，守护进程路由和状态变化要同步更新 `tests/daemon*.test.mjs`。
 - 插件载荷、技能、市场清单或 MCP 描述变化要同步更新 `tests/plugin-packaging.test.mjs`。
 - 修改用户可见安装、配置、等待或聊天消息处理流程时，同步更新 `README.md` 和相关 skill。
+- 涉及真实飞书消息链路的变更，除自动化测试外，应尽量用 `lark-cli` 做一次端到端验证：让 `lark-cli` 以人工用户身份发送、@ 机器人或上传资源，用本仓库 CLI 或 MCP 工具完成搜索聊天、绑定会话、等待/轮询、回复、确认和日志检查。验证记录只写通用步骤、现象和结论，不要把个人群名、聊天 ID、应用 ID、应用密钥或其他私有环境信息写进仓库。
 - 纯文档改动至少运行 `git diff --check`，并用 `rg` 检查是否留下过时路径或命令。代码改动至少运行相关 `node --test ...` 和 `npm run build`；发布前运行 `npm test` 与 `npm pack --dry-run`。
 
 ## 插件和发布
