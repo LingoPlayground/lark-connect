@@ -33,7 +33,7 @@
 - 人和智能体协作：工程师把截图、录屏或实现结果发到群里，设计师和产品经理 @ 机器人提出修改意见，本地智能体收到后继续改代码、验证并回传结果。
 - 智能体和智能体协作：多个同事各自的本地智能体进入同一个群，通过 @ 和回复关系轮流交接任务；例如两个智能体分别扮演不同角色进行长回合辩论、评审或方案推演。
 
-![两个智能体在飞书群里通过 lark-connect 异步交接发言](https://raw.githubusercontent.com/LingoPlayground/lark-connect/main/docs/assets/lark-connect-agent-collaboration.png)
+![两个智能体在飞书群里通过 lark-connect 异步交接发言](docs/assets/lark-connect-agent-collaboration.png)
 
 当前版本的设计边界：
 
