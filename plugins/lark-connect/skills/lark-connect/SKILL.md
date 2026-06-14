@@ -40,6 +40,20 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 当前 daemon 同一时间只允许一个绑定。只有当用户希望这个聊天停止绑定到旧会话时，才传入 `replace: true`。
 
+## 场景化工具流程
+
+先按场景选择工具，不要从工具清单倒推行动：
+
+- 进入已有聊天或刚完成绑定：调用 `lark_connect_get_chat_context`，默认读取最近 10 条消息，先建立协作背景，再进入 1 分钟短等待。
+- 收到一条孤立的 `wait` 或 `poll` 消息：如果缺少上下文、引用关系或前因后果，先调用 `lark_connect_get_chat_context`，再决定怎么处理。
+- 定位要 @ 的对象：调用 `lark_connect_get_chat_members`。需要人类同事时看 `members`；需要其他机器人时看 `bots`，并使用机器人结果里的 `openId`。
+- 机器人到机器人协作：先用 `lark_connect_get_chat_members` 找目标机器人，再用 `lark_connect_send_message` 传 `mentions`。如果是在响应某条消息，同时传入原消息的 `replyToMessageId`。
+- 回复某条具体消息：优先用 `replyToMessageId`，让飞书里能看到回复关系；只有话题上下文明确需要时才使用 `replyInThread`。
+- 发送产物给人验看：截图或静态界面用 `lark_connect_send_image`，录屏用 `lark_connect_send_video`，日志或压缩包用 `lark_connect_send_file`，简短说明用 `lark_connect_send_message`。
+- 处理收到的图片或文件：从 `wait` 或 `poll` 返回的 `resources` 里取 `fileKey`，再调用 `lark_connect_download_resource`。
+- 判断发送方是不是机器人：优先看投递消息里的 `senderType`。如果 `senderType: "bot"` 或 `senderType: "app"`，按机器人或应用发送者处理；需要名字时再用 `lark_connect_get_chat_members` 的 `bots` 结果按 `openId` 交叉确认。
+- 完成一条投递消息：先回复或说明处理结果，再调用 `lark_connect_ack_message`。历史消息不需要确认，只有 `wait` 或 `poll` 投递给当前会话的消息才需要确认。
+
 ## 上下文
 
 开始处理协作任务前，先调用 `lark_connect_get_chat_context` 读取当前绑定聊天的近期消息；不传 `limit` 时默认最近 10 条。这个工具用于理解人类协作背景、消息引用关系、谁在讨论、以及是否需要回复或 @ 人类同事和其他机器人。
@@ -48,7 +62,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 - 刚绑定并进入一个已有聊天时，先读一次上下文，然后继续短等待。上下文读取不是监听，不能替代 `lark_connect_wait_messages` 或 `lark_connect_poll_messages`。
 - `wait` 或 `poll` 返回的单条消息缺少背景时，先读上下文再处理，避免只看孤立消息就行动。
-- `wait` 或 `poll` 返回的消息如果 `senderType` 是 `app`，把它视为机器人或应用发送者；回复时可以结合 `replyToMessageId` 保持上下文。
+- `wait` 或 `poll` 返回的消息如果 `senderType` 是 `bot` 或 `app`，把它视为机器人或应用发送者；回复时可以结合 `replyToMessageId` 保持上下文。
 - 不要对上下文里的历史消息调用 `lark_connect_ack_message`；只有 `wait` 或 `poll` 投递给当前会话的消息才需要 ack。
 - 如果需要 @ 人类同事或其他机器人，优先从上下文的 `sender` 或 `mentions` 字段里取得真实 `openId`；不要编造用户或机器人标识。
 

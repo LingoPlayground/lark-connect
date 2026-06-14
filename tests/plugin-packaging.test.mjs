@@ -125,6 +125,13 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /lark_connect_get_chat_context/);
     assert.match(responderSkill, /lark_connect_get_chat_members/);
     assert.match(responderSkill, /members\/bots/);
+    assert.match(responderSkill, /## 场景化工具流程/);
+    assert.match(responderSkill, /已有聊天/);
+    assert.match(responderSkill, /定位要 @ 的对象/);
+    assert.match(responderSkill, /机器人到机器人协作/);
+    assert.match(responderSkill, /senderType.*bot/);
+    assert.match(responderSkill, /replyToMessageId/);
+    assert.match(responderSkill, /历史消息不需要确认/);
     assert.match(responderSkill, /开始处理协作任务前/);
     assert.match(responderSkill, /默认最近 10 条/);
     assert.match(responderSkill, /挑战文本/);
