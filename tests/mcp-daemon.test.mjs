@@ -356,6 +356,10 @@ describe("mcp daemon tools", () => {
       required: ["agentSessionId"],
       additionalProperties: false,
     });
+    assert.equal(
+      toolByName(tools, "lark_connect_get_chat_members").description,
+      "Read human members and group bots from the Feishu chat bound to one Codex or Claude Code session. Bot results come from the Feishu members/bots API and include bot open_id values.",
+    );
     assert.deepEqual(toolByName(tools, "lark_connect_get_chat_members").inputSchema, {
       type: "object",
       properties: {

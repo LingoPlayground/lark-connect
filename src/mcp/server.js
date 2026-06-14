@@ -101,7 +101,7 @@ const TOOLS = [
   {
     name: "lark_connect_get_chat_members",
     description:
-      "Read human members and recognizable recent bot/app senders from the Feishu chat bound to one Codex or Claude Code session.",
+      "Read human members and group bots from the Feishu chat bound to one Codex or Claude Code session. Bot results come from the Feishu members/bots API and include bot open_id values.",
     inputSchema: {
       type: "object",
       properties: {
