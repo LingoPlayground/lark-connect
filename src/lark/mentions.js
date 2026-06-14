@@ -3,7 +3,15 @@ export const MAX_MENTION_OPEN_ID_LENGTH = 128;
 export const MAX_MENTION_NAME_LENGTH = 80;
 
 const SAFE_OPEN_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-const UNSAFE_MENTION_NAME_PATTERN = /[<>&\u0000-\u001f\u007f]/u;
+
+function hasUnsafeMentionNameCharacter(value) {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (character === "<" || character === ">" || character === "&") return true;
+    if (codePoint <= 0x1f || codePoint === 0x7f) return true;
+  }
+  return false;
+}
 
 function normalizeMentionTarget(target) {
   if (!target || typeof target !== "object" || Array.isArray(target)) {
@@ -25,7 +33,7 @@ function normalizeMentionTarget(target) {
     if (name.length > MAX_MENTION_NAME_LENGTH) {
       throw new Error(`mentions.name must be at most ${MAX_MENTION_NAME_LENGTH} characters`);
     }
-    if (UNSAFE_MENTION_NAME_PATTERN.test(name)) {
+    if (hasUnsafeMentionNameCharacter(name)) {
       throw new Error("mentions.name must not contain tag control characters");
     }
     mention.name = name;
