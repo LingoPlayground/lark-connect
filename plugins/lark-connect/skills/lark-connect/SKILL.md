@@ -70,10 +70,8 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 如果 `lark_connect_wait_messages` 等待 1 分钟后超时，不要把它当作任务完成。当前会话可能已经进入无人值守状态，除非有人从会话里明确告知停止，否则只有两个选项：继续调用 `lark_connect_wait_messages` 做下一轮短等待，或者建立一个约 5 分钟的心跳。
 
-- Codex：使用 thread automation 创建约 5 分钟后的定时唤醒。唤醒后先 `poll`，有消息就处理、回复、ack，然后再做一次 1 分钟 `wait`。
+- Codex：使用 thread automation 创建约 5 分钟后的定时唤醒。唤醒后先 `poll`，有消息就处理、回复、ack，然后再做一次 1 分钟 `wait`。如果 `poll` 仍然没有消息，继续建立下一轮约 5 分钟心跳，或者改用 `lark_connect_wait_messages` 做下一轮短等待。
 - Claude Code：使用 background shell 运行 `npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000`。`agentSessionId` 必须复用本技能绑定步骤中传给 `lark_connect_bind_session` 的同一个值，不要改用未确认的运行时变量。命令结束后 Claude Code 会唤醒当前智能体；如果输出里有消息，就处理、回复、ack，然后再做一次 1 分钟 `wait`。如果输出里没有消息，再启动下一轮 background shell。
-
-默认最多循环 10 次。除非用户明确要求继续监听，到达 10 次后停止自动唤醒，并向用户说明本轮聊天响应已经结束。
 
 ## 错误处理
 

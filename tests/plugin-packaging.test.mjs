@@ -96,8 +96,12 @@ describe("dual runtime plugin packaging", () => {
     assert.match(setupSkill, /^# 飞书连接配置$/m);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest setup/);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest doctor --live/);
-    assert.match(setupSkill, /npx -y curiosea-lark-connect@latest daemon start/);
+    assert.match(setupSkill, /^npx -y curiosea-lark-connect@latest daemon start$/m);
     assert.doesNotMatch(setupSkill, /daemon start --detach/);
+    assert.doesNotMatch(
+      setupSkill,
+      /^npx -y curiosea-lark-connect@latest daemon start --foreground$/m,
+    );
     assert.match(setupSkill, /目标是群聊/);
     assert.match(setupSkill, /单聊.*挑战文本/);
 
@@ -138,7 +142,14 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /只有两个选项/);
     assert.match(responderSkill, /继续调用 `lark_connect_wait_messages`/);
     assert.match(responderSkill, /心跳/);
-    assert.match(responderSkill, /最多循环 10 次/);
+    assert.match(responderSkill, /如果 `poll` 仍然没有消息/);
+    assert.doesNotMatch(responderSkill, /最多循环 10 次/);
     assert.match(responderSkill, /lark_connect_ack_message/);
+
+    const readme = readText("README.md");
+    assert.match(readme, /绑定成功后必须立即调用 `lark_connect_wait_messages`/);
+    assert.match(readme, /不要把超时当作监听结束/);
+    assert.match(readme, /继续调用 `lark_connect_wait_messages`/);
+    assert.match(readme, /node src\/cli\.js daemon start --foreground/);
   });
 });

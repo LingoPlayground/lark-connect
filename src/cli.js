@@ -21,7 +21,11 @@ import { runMcpServer } from "./mcp/server.js";
 
 const DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS = 300_000;
 const MAX_BACKGROUND_WAIT_TIMEOUT_MS = 2_147_483_647;
-const FOREGROUND_DAEMON_START_COMMAND = "curiosea-lark-connect daemon start --foreground";
+const DEFAULT_DAEMON_START_TIMEOUT_MS = 2_000;
+const DAEMON_START_POLL_INTERVAL_MS = 50;
+const PACKAGE_COMMAND = "npx -y curiosea-lark-connect@latest";
+const FOREGROUND_DAEMON_START_COMMAND = `${PACKAGE_COMMAND} daemon start --foreground`;
+const DAEMON_STATUS_COMMAND = `${PACKAGE_COMMAND} daemon status`;
 
 function readOption(args, name) {
   const index = args.indexOf(name);
@@ -121,7 +125,17 @@ function createDaemonClient(config, createClient) {
 }
 
 function createDetachedDaemonArgs(argv) {
-  const args = argv.filter((arg) => arg !== "--detach" && arg !== "--foreground");
+  const args = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--foreground") continue;
+    if (arg === "--daemon-start-timeout-ms") {
+      index += 1;
+      continue;
+    }
+    args.push(arg);
+  }
+
   return [
     fileURLToPath(import.meta.url),
     ...args.slice(0, 2),
@@ -136,6 +150,31 @@ async function spawnDetachedDaemon(command, args, options) {
   return { pid: child.pid };
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function waitForDaemonReady(client, options = {}) {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_DAEMON_START_TIMEOUT_MS;
+  const sleepImpl = options.sleep ?? sleep;
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+
+  for (;;) {
+    try {
+      return await client.status();
+    } catch (error) {
+      lastError = error;
+    }
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw lastError;
+    await sleepImpl(Math.min(DAEMON_START_POLL_INTERVAL_MS, remainingMs));
+  }
+}
+
 export async function main(argv = process.argv.slice(2), runtime = {}) {
   const command = argv[0];
   const stdout = runtime.stdout ?? process.stdout;
@@ -146,6 +185,7 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
   const startDaemonImpl = runtime.startDaemonImpl ?? startDaemon;
   const spawnDetachedDaemonImpl =
     runtime.spawnDetachedDaemonImpl ?? spawnDetachedDaemon;
+  const sleepImpl = runtime.sleepImpl ?? sleep;
   const createDaemonHttpClientImpl =
     runtime.createDaemonHttpClientImpl ?? createDaemonHttpClient;
 
@@ -262,7 +302,23 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
     const config = resolveCliConfig(argv, runtime);
 
     if (subcommand === "start") {
+      if (hasOption(argv, "--detach")) {
+        throw new Error("--detach is no longer supported. Use daemon start for background mode.");
+      }
+
       if (!hasOption(argv, "--foreground")) {
+        if (config.daemonPort === 0) {
+          throw new Error(
+            "--daemon-port 0 cannot be used with background daemon start. Use --foreground for random-port debugging.",
+          );
+        }
+
+        const startTimeoutMs = readIntegerOption(
+          argv,
+          "--daemon-start-timeout-ms",
+          DEFAULT_DAEMON_START_TIMEOUT_MS,
+          { min: 0, max: MAX_BACKGROUND_WAIT_TIMEOUT_MS },
+        );
         const child = await spawnDetachedDaemonImpl(
           process.execPath,
           createDetachedDaemonArgs(argv),
@@ -272,13 +328,25 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
             env: runtime.env ? { ...process.env, ...runtime.env } : process.env,
           },
         );
+        const client = createDaemonClient(config, createDaemonHttpClientImpl);
+        try {
+          await waitForDaemonReady(client, {
+            timeoutMs: startTimeoutMs,
+            sleep: sleepImpl,
+          });
+        } catch (error) {
+          throw new Error(
+            `daemon did not become ready within ${startTimeoutMs}ms after background start. Run ${FOREGROUND_DAEMON_START_COMMAND} to see startup errors.`,
+            { cause: error },
+          );
+        }
         stdout.write(
           `${JSON.stringify(
             {
-              state: "starting",
+              state: "started",
               detached: true,
               pid: child.pid,
-              command: FOREGROUND_DAEMON_START_COMMAND,
+              statusCommand: DAEMON_STATUS_COMMAND,
             },
             null,
             2,

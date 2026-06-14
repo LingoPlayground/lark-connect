@@ -324,6 +324,7 @@ describe("cli daemon", () => {
     let stdout = "";
     let exitCode;
     let observedSpawn;
+    let statusCalls = 0;
 
     await main(
       [
@@ -339,6 +340,16 @@ describe("cli daemon", () => {
           observedSpawn = { command, args, options };
           return { pid: 12345 };
         },
+        createDaemonHttpClientImpl: () => ({
+          async status() {
+            statusCalls += 1;
+            return {
+              bindings: [],
+              sessions: [],
+              idleDeadlineAt: 123,
+            };
+          },
+        }),
         startDaemonImpl: async () => {
           throw new Error("foreground daemon should not start in detach mode");
         },
@@ -354,7 +365,8 @@ describe("cli daemon", () => {
     );
 
     assert.equal(observedSpawn.command, process.execPath);
-    assert.deepEqual(observedSpawn.args.slice(-7), [
+    assert.match(observedSpawn.args[0], /src\/cli\.js$/);
+    assert.deepEqual(observedSpawn.args.slice(1), [
       "daemon",
       "start",
       "--foreground",
@@ -365,16 +377,65 @@ describe("cli daemon", () => {
     ]);
     assert.equal(observedSpawn.options.detached, true);
     assert.equal(observedSpawn.options.stdio, "ignore");
+    assert.equal(statusCalls, 1);
     assert.deepEqual(JSON.parse(stdout), {
-      state: "starting",
+      state: "started",
       detached: true,
       pid: 12345,
-      command: "curiosea-lark-connect daemon start --foreground",
+      statusCommand: "npx -y curiosea-lark-connect@latest daemon status",
     });
     assert.equal(exitCode, 0);
   });
 
-  it("starts the daemon with resolved config and waits until it closes", async () => {
+  it("reports daemon startup failures when the background child never becomes reachable", async () => {
+    await assert.rejects(
+      () =>
+        main(["daemon", "start", "--daemon-start-timeout-ms", "0"], {
+          spawnDetachedDaemonImpl: async () => ({ pid: 12345 }),
+          createDaemonHttpClientImpl: () => ({
+            async status() {
+              throw Object.assign(new Error("daemon not reachable"), {
+                code: "DAEMON_NOT_RUNNING",
+              });
+            },
+          }),
+          sleepImpl: async () => {},
+          stdout: createStdout().stdout,
+          exit() {
+            throw new Error("daemon start should not exit before readiness failure");
+          },
+        }),
+      /daemon did not become ready/,
+    );
+  });
+
+  it("rejects the removed detach flag instead of recursively passing it to the child", async () => {
+    await assert.rejects(
+      () =>
+        main(["daemon", "start", "--detach"], {
+          stdout: createStdout().stdout,
+          exit() {
+            throw new Error("daemon start should reject before exiting");
+          },
+        }),
+      /--detach is no longer supported/,
+    );
+  });
+
+  it("rejects random daemon ports in background mode", async () => {
+    await assert.rejects(
+      () =>
+        main(["daemon", "start", "--daemon-port", "0"], {
+          stdout: createStdout().stdout,
+          exit() {
+            throw new Error("daemon start should reject before exiting");
+          },
+        }),
+      /--daemon-port 0 cannot be used with background daemon start/,
+    );
+  });
+
+  it("starts the daemon in foreground mode with resolved config and waits until it closes", async () => {
     let stdout = "";
     let waited = false;
     let observedConfig;

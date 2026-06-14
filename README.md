@@ -102,6 +102,7 @@ npx -y curiosea-lark-connect@latest daemon stop
 4. 拿到目标群或单聊 `chatId` 后，调用 `lark_connect_bind_session`。
 5. 传入 `chatId`、`agentKind`、`agentSessionId`、`workspace`。
 6. 如果目标聊天已经绑定到旧会话，只有在用户明确要求接管时才传 `replace: true`。
+7. 绑定成功后必须立即调用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`，让当前会话马上进入监听。
 
 绑定后，常用工具是：
 
@@ -122,9 +123,9 @@ npx -y curiosea-lark-connect@latest daemon stop
 
 ### 长时间等待聊天消息
 
-短等待用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`。如果 1 分钟没有消息，不要一直阻塞当前回合。
+短等待用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`。如果 1 分钟没有消息，不要把超时当作监听结束；后续只有两个选择：继续调用 `lark_connect_wait_messages` 做下一轮短等待，或者建立约 5 分钟的心跳。
 
-Codex 应使用 thread automation（线程自动化）定时唤醒，约 5 分钟后再次 `poll`。
+Codex 应使用 thread automation（线程自动化）定时唤醒，约 5 分钟后先调用 `lark_connect_poll_messages`。如果有消息，处理、回复、ack 后再做 1 分钟短等待；如果没有消息，继续下一轮心跳或改用短等待。
 
 Claude Code 应使用 background shell（后台 shell）：
 
@@ -226,7 +227,7 @@ npm pack --dry-run
 node src/cli.js --help
 node src/cli.js setup
 node src/cli.js doctor --live
-node src/cli.js daemon start
+node src/cli.js daemon start --foreground
 node src/cli.js mcp
 ```
 
