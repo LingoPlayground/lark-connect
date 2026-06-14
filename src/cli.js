@@ -78,7 +78,7 @@ Usage:
   curiosea-lark-connect doctor [--live] [--app-id cli_xxx] [--chat-id oc_xxx]
   curiosea-lark-connect debug listen-once [--timeout-ms 120000] --chat-id oc_xxx
   curiosea-lark-connect wait --agent-session-id <id> [--timeout-ms 300000] [--daemon-port 51745]
-  curiosea-lark-connect logs [--tail 100] [--agent-session-id <id>] [--file <path>]
+  curiosea-lark-connect logs [--tail 100] [--agent-session-id <id>]
   curiosea-lark-connect daemon start [--foreground] [--daemon-port 51745]
   curiosea-lark-connect daemon status [--daemon-port 51745]
   curiosea-lark-connect daemon stop [--daemon-port 51745]
