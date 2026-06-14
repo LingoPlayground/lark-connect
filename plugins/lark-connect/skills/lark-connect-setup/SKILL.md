@@ -50,6 +50,8 @@ npx -y curiosea-lark-connect@latest doctor --live
 npx -y curiosea-lark-connect@latest daemon start
 ```
 
+`daemon start` 默认在后台启动并立即返回。不要在智能体对话里使用 `daemon start --foreground`，它会长时间占住当前 shell。
+
 然后检查状态：
 
 ```bash

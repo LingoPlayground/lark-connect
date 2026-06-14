@@ -13,7 +13,7 @@ export const DAEMON_ERROR_CODES = {
   INTERNAL_ERROR: "INTERNAL_ERROR",
 };
 
-export const DAEMON_START_COMMAND = "curiosea-lark-connect daemon start";
+export const DAEMON_START_COMMAND = "npx -y curiosea-lark-connect@latest daemon start";
 
 export class DaemonRuntimeError extends Error {
   constructor(code, message, details = {}) {

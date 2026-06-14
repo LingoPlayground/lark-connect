@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +21,11 @@ import { runMcpServer } from "./mcp/server.js";
 
 const DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS = 300_000;
 const MAX_BACKGROUND_WAIT_TIMEOUT_MS = 2_147_483_647;
+const DEFAULT_DAEMON_START_TIMEOUT_MS = 2_000;
+const DAEMON_START_POLL_INTERVAL_MS = 50;
+const PACKAGE_COMMAND = "npx -y curiosea-lark-connect@latest";
+const FOREGROUND_DAEMON_START_COMMAND = `${PACKAGE_COMMAND} daemon start --foreground`;
+const DAEMON_STATUS_COMMAND = `${PACKAGE_COMMAND} daemon status`;
 
 function readOption(args, name) {
   const index = args.indexOf(name);
@@ -71,7 +77,7 @@ Usage:
   curiosea-lark-connect doctor [--live] [--app-id cli_xxx] [--chat-id oc_xxx]
   curiosea-lark-connect debug listen-once [--timeout-ms 120000] --chat-id oc_xxx
   curiosea-lark-connect wait --agent-session-id <id> [--timeout-ms 300000] [--daemon-port 51745]
-  curiosea-lark-connect daemon start [--daemon-port 51745]
+  curiosea-lark-connect daemon start [--foreground] [--daemon-port 51745]
   curiosea-lark-connect daemon status [--daemon-port 51745]
   curiosea-lark-connect daemon stop [--daemon-port 51745]
   curiosea-lark-connect mcp
@@ -118,6 +124,57 @@ function createDaemonClient(config, createClient) {
   });
 }
 
+function createDetachedDaemonArgs(argv) {
+  const args = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--foreground") continue;
+    if (arg === "--daemon-start-timeout-ms") {
+      index += 1;
+      continue;
+    }
+    args.push(arg);
+  }
+
+  return [
+    fileURLToPath(import.meta.url),
+    ...args.slice(0, 2),
+    "--foreground",
+    ...args.slice(2),
+  ];
+}
+
+async function spawnDetachedDaemon(command, args, options) {
+  const child = spawn(command, args, options);
+  child.unref();
+  return { pid: child.pid };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function waitForDaemonReady(client, options = {}) {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_DAEMON_START_TIMEOUT_MS;
+  const sleepImpl = options.sleep ?? sleep;
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+
+  for (;;) {
+    try {
+      return await client.status();
+    } catch (error) {
+      lastError = error;
+    }
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw lastError;
+    await sleepImpl(Math.min(DAEMON_START_POLL_INTERVAL_MS, remainingMs));
+  }
+}
+
 export async function main(argv = process.argv.slice(2), runtime = {}) {
   const command = argv[0];
   const stdout = runtime.stdout ?? process.stdout;
@@ -126,6 +183,9 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
   const runLiveDoctorImpl = runtime.runLiveDoctorImpl ?? runLiveDoctor;
   const runMcpServerImpl = runtime.runMcpServerImpl ?? runMcpServer;
   const startDaemonImpl = runtime.startDaemonImpl ?? startDaemon;
+  const spawnDetachedDaemonImpl =
+    runtime.spawnDetachedDaemonImpl ?? spawnDetachedDaemon;
+  const sleepImpl = runtime.sleepImpl ?? sleep;
   const createDaemonHttpClientImpl =
     runtime.createDaemonHttpClientImpl ?? createDaemonHttpClient;
 
@@ -242,6 +302,60 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
     const config = resolveCliConfig(argv, runtime);
 
     if (subcommand === "start") {
+      if (hasOption(argv, "--detach")) {
+        throw new Error("--detach is no longer supported. Use daemon start for background mode.");
+      }
+
+      if (!hasOption(argv, "--foreground")) {
+        if (config.daemonPort === 0) {
+          throw new Error(
+            "--daemon-port 0 cannot be used with background daemon start. Use --foreground for random-port debugging.",
+          );
+        }
+
+        const startTimeoutMs = readIntegerOption(
+          argv,
+          "--daemon-start-timeout-ms",
+          DEFAULT_DAEMON_START_TIMEOUT_MS,
+          { min: 0, max: MAX_BACKGROUND_WAIT_TIMEOUT_MS },
+        );
+        const child = await spawnDetachedDaemonImpl(
+          process.execPath,
+          createDetachedDaemonArgs(argv),
+          {
+            detached: true,
+            stdio: "ignore",
+            env: runtime.env ? { ...process.env, ...runtime.env } : process.env,
+          },
+        );
+        const client = createDaemonClient(config, createDaemonHttpClientImpl);
+        try {
+          await waitForDaemonReady(client, {
+            timeoutMs: startTimeoutMs,
+            sleep: sleepImpl,
+          });
+        } catch (error) {
+          throw new Error(
+            `daemon did not become ready within ${startTimeoutMs}ms after background start. Run ${FOREGROUND_DAEMON_START_COMMAND} to see startup errors.`,
+            { cause: error },
+          );
+        }
+        stdout.write(
+          `${JSON.stringify(
+            {
+              state: "started",
+              detached: true,
+              pid: child.pid,
+              statusCommand: DAEMON_STATUS_COMMAND,
+            },
+            null,
+            2,
+          )}\n`,
+        );
+        exit(0);
+        return;
+      }
+
       const daemon = await startDaemonImpl(config);
       stdout.write(
         `${JSON.stringify({ state: "started", address: daemon.address }, null, 2)}\n`,

@@ -70,7 +70,7 @@ describe("daemon http client", () => {
       () => client.status(),
       (error) =>
         error?.code === "DAEMON_NOT_RUNNING" &&
-        error?.command === "curiosea-lark-connect daemon start",
+        error?.command === "npx -y curiosea-lark-connect@latest daemon start",
     );
   });
 });
@@ -438,6 +438,22 @@ describe("daemon http server", () => {
 
       const emptyWait = await server.client.waitForMessages("thread_a", { timeoutMs: 0 });
       assert.deepEqual(emptyWait.messages, []);
+      assert.match(emptyWait.nextSteps.join("\n"), /继续调用 lark_connect_wait_messages/);
+      assert.match(emptyWait.nextSteps.join("\n"), /心跳/);
+      assert.match(
+        emptyWait.nextSteps.join("\n"),
+        /npx -y curiosea-lark-connect@latest wait --agent-session-id thread_a --timeout-ms 300000/,
+      );
+      assert.doesNotMatch(emptyWait.nextSteps.join("\n"), /<绑定时使用的 agentSessionId>/);
+      assert.match(emptyWait.nextSteps.join("\n"), /唤醒后先调用 lark_connect_poll_messages/);
+
+      server.runtime.receiveLarkMessage(larkMessage({ messageId: "om_wait_ready" }));
+      const readyWait = await server.client.waitForMessages("thread_a", { timeoutMs: 0 });
+      assert.deepEqual(
+        readyWait.messages.map((message) => message.larkMessageId),
+        ["om_wait_ready"],
+      );
+      assert.equal(readyWait.nextSteps, undefined);
     } finally {
       await server.close();
     }
