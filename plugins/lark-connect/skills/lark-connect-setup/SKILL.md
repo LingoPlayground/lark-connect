@@ -47,10 +47,10 @@ npx -y curiosea-lark-connect@latest doctor --live
 5. 当模型上下文协议工具返回 `DAEMON_NOT_RUNNING` 时，启动守护进程：
 
 ```bash
-npx -y curiosea-lark-connect@latest daemon start --detach
+npx -y curiosea-lark-connect@latest daemon start
 ```
 
-必须使用 `--detach`，这样 shell 调用会在启动后立即返回。不要在智能体对话里使用前台 `daemon start` 长时间占住当前 shell。
+`daemon start` 默认在后台启动并立即返回。不要在智能体对话里使用 `daemon start --foreground`，它会长时间占住当前 shell。
 
 然后检查状态：
 

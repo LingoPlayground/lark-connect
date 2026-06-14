@@ -96,7 +96,8 @@ describe("dual runtime plugin packaging", () => {
     assert.match(setupSkill, /^# 飞书连接配置$/m);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest setup/);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest doctor --live/);
-    assert.match(setupSkill, /npx -y curiosea-lark-connect@latest daemon start --detach/);
+    assert.match(setupSkill, /npx -y curiosea-lark-connect@latest daemon start/);
+    assert.doesNotMatch(setupSkill, /daemon start --detach/);
     assert.match(setupSkill, /目标是群聊/);
     assert.match(setupSkill, /单聊.*挑战文本/);
 

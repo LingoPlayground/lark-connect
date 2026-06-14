@@ -163,6 +163,22 @@ function createSessionNotBoundError(agentSessionId) {
   );
 }
 
+function waitTimeoutNextSteps(agentSessionId) {
+  return [
+    "没有收到新消息。继续调用 lark_connect_wait_messages 做下一轮短等待，或建立约 5 分钟的心跳。",
+    "Codex 使用 thread automation 定时唤醒；Claude Code 使用 background shell 调用 curiosea-lark-connect wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000。",
+    `除非有人明确要求停止，不要把 agentSessionId ${agentSessionId} 的这次超时当作监听结束。`,
+  ];
+}
+
+function waitMessagesBody(agentSessionId, messages) {
+  const body = { messages };
+  if (messages.length === 0) {
+    body.nextSteps = waitTimeoutNextSteps(agentSessionId);
+  }
+  return body;
+}
+
 function requireBoundChat(runtime, agentSessionId) {
   const binding = runtime
     .getStatus()
@@ -564,7 +580,7 @@ export function createDaemonHttpServer(options = {}) {
           const messages = await runtime.waitForMessages(messagesRoute.agentSessionId, {
             timeoutMs,
           });
-          sendJson(response, 200, { messages });
+          sendJson(response, 200, waitMessagesBody(messagesRoute.agentSessionId, messages));
           return;
         }
 

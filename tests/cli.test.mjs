@@ -320,7 +320,7 @@ describe("cli doctor", () => {
 });
 
 describe("cli daemon", () => {
-  it("starts the daemon in a detached background process without waiting", async () => {
+  it("starts the daemon in a detached background process by default", async () => {
     let stdout = "";
     let exitCode;
     let observedSpawn;
@@ -329,7 +329,6 @@ describe("cli daemon", () => {
       [
         "daemon",
         "start",
-        "--detach",
         "--daemon-port",
         "6000",
         "--daemon-idle-timeout-ms",
@@ -355,22 +354,22 @@ describe("cli daemon", () => {
     );
 
     assert.equal(observedSpawn.command, process.execPath);
-    assert.deepEqual(observedSpawn.args.slice(-6), [
+    assert.deepEqual(observedSpawn.args.slice(-7), [
       "daemon",
       "start",
+      "--foreground",
       "--daemon-port",
       "6000",
       "--daemon-idle-timeout-ms",
       "5000",
     ]);
-    assert.equal(observedSpawn.args.includes("--detach"), false);
     assert.equal(observedSpawn.options.detached, true);
     assert.equal(observedSpawn.options.stdio, "ignore");
     assert.deepEqual(JSON.parse(stdout), {
       state: "starting",
       detached: true,
       pid: 12345,
-      command: "curiosea-lark-connect daemon start",
+      command: "curiosea-lark-connect daemon start --foreground",
     });
     assert.equal(exitCode, 0);
   });
@@ -390,6 +389,7 @@ describe("cli daemon", () => {
       [
         "daemon",
         "start",
+        "--foreground",
         "--daemon-port",
         "6000",
         "--daemon-idle-timeout-ms",

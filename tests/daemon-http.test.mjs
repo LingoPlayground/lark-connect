@@ -70,7 +70,7 @@ describe("daemon http client", () => {
       () => client.status(),
       (error) =>
         error?.code === "DAEMON_NOT_RUNNING" &&
-        error?.command === "curiosea-lark-connect daemon start --detach",
+        error?.command === "curiosea-lark-connect daemon start",
     );
   });
 });
@@ -438,6 +438,8 @@ describe("daemon http server", () => {
 
       const emptyWait = await server.client.waitForMessages("thread_a", { timeoutMs: 0 });
       assert.deepEqual(emptyWait.messages, []);
+      assert.match(emptyWait.nextSteps.join("\n"), /继续调用 lark_connect_wait_messages/);
+      assert.match(emptyWait.nextSteps.join("\n"), /心跳/);
     } finally {
       await server.close();
     }

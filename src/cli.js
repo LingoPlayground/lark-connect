@@ -21,7 +21,7 @@ import { runMcpServer } from "./mcp/server.js";
 
 const DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS = 300_000;
 const MAX_BACKGROUND_WAIT_TIMEOUT_MS = 2_147_483_647;
-const FOREGROUND_DAEMON_START_COMMAND = "curiosea-lark-connect daemon start";
+const FOREGROUND_DAEMON_START_COMMAND = "curiosea-lark-connect daemon start --foreground";
 
 function readOption(args, name) {
   const index = args.indexOf(name);
@@ -73,7 +73,7 @@ Usage:
   curiosea-lark-connect doctor [--live] [--app-id cli_xxx] [--chat-id oc_xxx]
   curiosea-lark-connect debug listen-once [--timeout-ms 120000] --chat-id oc_xxx
   curiosea-lark-connect wait --agent-session-id <id> [--timeout-ms 300000] [--daemon-port 51745]
-  curiosea-lark-connect daemon start [--detach] [--daemon-port 51745]
+  curiosea-lark-connect daemon start [--foreground] [--daemon-port 51745]
   curiosea-lark-connect daemon status [--daemon-port 51745]
   curiosea-lark-connect daemon stop [--daemon-port 51745]
   curiosea-lark-connect mcp
@@ -121,9 +121,12 @@ function createDaemonClient(config, createClient) {
 }
 
 function createDetachedDaemonArgs(argv) {
+  const args = argv.filter((arg) => arg !== "--detach" && arg !== "--foreground");
   return [
     fileURLToPath(import.meta.url),
-    ...argv.filter((arg) => arg !== "--detach"),
+    ...args.slice(0, 2),
+    "--foreground",
+    ...args.slice(2),
   ];
 }
 
@@ -259,7 +262,7 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
     const config = resolveCliConfig(argv, runtime);
 
     if (subcommand === "start") {
-      if (hasOption(argv, "--detach")) {
+      if (!hasOption(argv, "--foreground")) {
         const child = await spawnDetachedDaemonImpl(
           process.execPath,
           createDetachedDaemonArgs(argv),
