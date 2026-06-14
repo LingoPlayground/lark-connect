@@ -30,7 +30,7 @@ describe("dual runtime plugin packaging", () => {
   it("defines Codex and Claude plugin manifests for the same plugin", () => {
     const codexManifest = readJson("plugins/lark-connect/.codex-plugin/plugin.json");
     assert.equal(codexManifest.name, "lark-connect");
-    assert.equal(codexManifest.version, "0.1.4");
+    assert.equal(codexManifest.version, "0.1.5");
     assert.equal(codexManifest.skills, "./skills/");
     assert.equal(codexManifest.mcpServers, "./codex.mcp.json");
     assert.match(codexManifest.description, /飞书/);
@@ -55,7 +55,7 @@ describe("dual runtime plugin packaging", () => {
   it("registers the plugin in Codex and Claude marketplaces", () => {
     const codexMarketplace = readJson(".agents/plugins/marketplace.json");
     const codexEntry = codexMarketplace.plugins.find((entry) => entry.name === "lark-connect");
-    assert.equal(codexEntry.version, "0.1.4");
+    assert.equal(codexEntry.version, "0.1.5");
     assert.equal(codexEntry.source.path, "./plugins/lark-connect");
     assert.equal(codexEntry.policy.installation, "AVAILABLE");
     assert.equal(codexEntry.policy.authentication, "ON_INSTALL");
@@ -64,7 +64,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(claudeMarketplace.description, /飞书/);
     assert.match(claudeMarketplace.description, /搜索/);
     const claudeEntry = claudeMarketplace.plugins.find((entry) => entry.name === "lark-connect");
-    assert.equal(claudeEntry.version, "0.1.4");
+    assert.equal(claudeEntry.version, "0.1.5");
     assert.match(claudeEntry.description, /飞书/);
     assert.match(claudeEntry.description, /搜索群聊/);
     assert.match(claudeEntry.description, /发现单聊/);
@@ -96,7 +96,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(setupSkill, /^# 飞书连接配置$/m);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest setup/);
     assert.match(setupSkill, /npx -y curiosea-lark-connect@latest doctor --live/);
-    assert.match(setupSkill, /npx -y curiosea-lark-connect@latest daemon start/);
+    assert.match(setupSkill, /npx -y curiosea-lark-connect@latest daemon start --detach/);
     assert.match(setupSkill, /目标是群聊/);
     assert.match(setupSkill, /单聊.*挑战文本/);
 
@@ -121,6 +121,8 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /创建群/);
     assert.match(responderSkill, /机器人拉入群/);
     assert.match(responderSkill, /lark_connect_bind_session/);
+    assert.match(responderSkill, /绑定成功后必须立即调用 `lark_connect_wait_messages`/);
+    assert.match(responderSkill, /不是可选步骤/);
     assert.match(responderSkill, /不要编造/);
     assert.match(responderSkill, /单聊/);
     assert.match(responderSkill, /lark_connect_wait_messages/);
@@ -132,6 +134,9 @@ describe("dual runtime plugin packaging", () => {
       /npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 agentSessionId> --timeout-ms 300000/,
     );
     assert.match(responderSkill, /5 分钟/);
+    assert.match(responderSkill, /只有两个选项/);
+    assert.match(responderSkill, /继续调用 `lark_connect_wait_messages`/);
+    assert.match(responderSkill, /心跳/);
     assert.match(responderSkill, /最多循环 10 次/);
     assert.match(responderSkill, /lark_connect_ack_message/);
   });

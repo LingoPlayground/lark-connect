@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +21,7 @@ import { runMcpServer } from "./mcp/server.js";
 
 const DEFAULT_BACKGROUND_WAIT_TIMEOUT_MS = 300_000;
 const MAX_BACKGROUND_WAIT_TIMEOUT_MS = 2_147_483_647;
+const FOREGROUND_DAEMON_START_COMMAND = "curiosea-lark-connect daemon start";
 
 function readOption(args, name) {
   const index = args.indexOf(name);
@@ -71,7 +73,7 @@ Usage:
   curiosea-lark-connect doctor [--live] [--app-id cli_xxx] [--chat-id oc_xxx]
   curiosea-lark-connect debug listen-once [--timeout-ms 120000] --chat-id oc_xxx
   curiosea-lark-connect wait --agent-session-id <id> [--timeout-ms 300000] [--daemon-port 51745]
-  curiosea-lark-connect daemon start [--daemon-port 51745]
+  curiosea-lark-connect daemon start [--detach] [--daemon-port 51745]
   curiosea-lark-connect daemon status [--daemon-port 51745]
   curiosea-lark-connect daemon stop [--daemon-port 51745]
   curiosea-lark-connect mcp
@@ -118,6 +120,19 @@ function createDaemonClient(config, createClient) {
   });
 }
 
+function createDetachedDaemonArgs(argv) {
+  return [
+    fileURLToPath(import.meta.url),
+    ...argv.filter((arg) => arg !== "--detach"),
+  ];
+}
+
+async function spawnDetachedDaemon(command, args, options) {
+  const child = spawn(command, args, options);
+  child.unref();
+  return { pid: child.pid };
+}
+
 export async function main(argv = process.argv.slice(2), runtime = {}) {
   const command = argv[0];
   const stdout = runtime.stdout ?? process.stdout;
@@ -126,6 +141,8 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
   const runLiveDoctorImpl = runtime.runLiveDoctorImpl ?? runLiveDoctor;
   const runMcpServerImpl = runtime.runMcpServerImpl ?? runMcpServer;
   const startDaemonImpl = runtime.startDaemonImpl ?? startDaemon;
+  const spawnDetachedDaemonImpl =
+    runtime.spawnDetachedDaemonImpl ?? spawnDetachedDaemon;
   const createDaemonHttpClientImpl =
     runtime.createDaemonHttpClientImpl ?? createDaemonHttpClient;
 
@@ -242,6 +259,32 @@ export async function main(argv = process.argv.slice(2), runtime = {}) {
     const config = resolveCliConfig(argv, runtime);
 
     if (subcommand === "start") {
+      if (hasOption(argv, "--detach")) {
+        const child = await spawnDetachedDaemonImpl(
+          process.execPath,
+          createDetachedDaemonArgs(argv),
+          {
+            detached: true,
+            stdio: "ignore",
+            env: runtime.env ? { ...process.env, ...runtime.env } : process.env,
+          },
+        );
+        stdout.write(
+          `${JSON.stringify(
+            {
+              state: "starting",
+              detached: true,
+              pid: child.pid,
+              command: FOREGROUND_DAEMON_START_COMMAND,
+            },
+            null,
+            2,
+          )}\n`,
+        );
+        exit(0);
+        return;
+      }
+
       const daemon = await startDaemonImpl(config);
       stdout.write(
         `${JSON.stringify({ state: "started", address: daemon.address }, null, 2)}\n`,

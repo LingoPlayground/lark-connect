@@ -75,10 +75,12 @@ npx -y curiosea-lark-connect@latest doctor --live
 MCP 工具不会自动启动守护进程。调用工具时如果返回 `DAEMON_NOT_RUNNING`，先执行：
 
 ```bash
-npx -y curiosea-lark-connect@latest daemon start
+npx -y curiosea-lark-connect@latest daemon start --detach
 ```
 
-另开一个终端或后台任务后，可以检查状态：
+这个命令会在后台启动守护进程并立即返回，适合 Codex 和 Claude Code 的 shell 调用。开发调试时如果希望前台常驻，可以去掉 `--detach`。
+
+启动后可以检查状态：
 
 ```bash
 npx -y curiosea-lark-connect@latest daemon status
@@ -224,7 +226,7 @@ npm pack --dry-run
 node src/cli.js --help
 node src/cli.js setup
 node src/cli.js doctor --live
-node src/cli.js daemon start
+node src/cli.js daemon start --detach
 node src/cli.js mcp
 ```
 

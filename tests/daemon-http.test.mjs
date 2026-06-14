@@ -70,7 +70,7 @@ describe("daemon http client", () => {
       () => client.status(),
       (error) =>
         error?.code === "DAEMON_NOT_RUNNING" &&
-        error?.command === "curiosea-lark-connect daemon start",
+        error?.command === "curiosea-lark-connect daemon start --detach",
     );
   });
 });
