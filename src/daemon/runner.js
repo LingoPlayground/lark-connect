@@ -1,5 +1,6 @@
 import { createDaemonRuntime } from "./runtime.js";
 import { createDaemonHttpServer } from "./http-server.js";
+import { createJsonlLogger } from "./logger.js";
 import { createLarkChannelRunner } from "../lark/channel-runner.js";
 import { createLarkChatContextClient } from "../lark/chat-context.js";
 import { createLarkChatMembersClient } from "../lark/chat-members.js";
@@ -13,59 +14,88 @@ function nextIdleDelay(runtime) {
 }
 
 export async function startDaemon(config, options = {}) {
+  const logger = options.logger ?? createJsonlLogger();
+  function writeLog(event, details = {}) {
+    try {
+      logger.write(event, details);
+    } catch {
+      // Logging is diagnostic only; daemon lifecycle must not depend on it.
+    }
+  }
   const runtime =
     options.runtime ??
     createDaemonRuntime({
       idleTimeoutMs: config.daemonIdleTimeoutMs,
+      logger,
     });
-  const channelRunner =
-    options.channelRunner ??
-    createLarkChannelRunner(config, {
-      runtime,
-      channelFactory: options.channelFactory,
+  writeLog("daemon_starting", {
+    host: config.daemonHost,
+    port: config.daemonPort,
+    idleTimeoutMs: config.daemonIdleTimeoutMs,
+  });
+
+  let channelRunner;
+  let reactionClient;
+  let messageClient;
+  let chatClient;
+  let chatContextClient;
+  let chatMembersClient;
+  let resourceClient;
+  try {
+    channelRunner =
+      options.channelRunner ??
+      createLarkChannelRunner(config, {
+        runtime,
+        channelFactory: options.channelFactory,
+      });
+    reactionClient =
+      options.reactionClient ??
+      (options.httpServer
+        ? undefined
+        : await createLarkReactionClient(config, {
+            channelFactory: options.reactionChannelFactory,
+          }));
+    messageClient =
+      options.messageClient ??
+      (options.httpServer
+        ? undefined
+        : await createLarkMessageClient(config, {
+            channelFactory: options.messageChannelFactory,
+          }));
+    chatClient =
+      options.chatClient ??
+      (options.httpServer
+        ? undefined
+        : await createLarkChatClient(config, {
+            channelFactory: options.chatChannelFactory,
+          }));
+    chatContextClient =
+      options.chatContextClient ??
+      (options.httpServer
+        ? undefined
+        : await createLarkChatContextClient(config, {
+            channelFactory: options.chatContextChannelFactory,
+          }));
+    chatMembersClient =
+      options.chatMembersClient ??
+      (options.httpServer
+        ? undefined
+        : await createLarkChatMembersClient(config, {
+            channelFactory: options.chatMembersChannelFactory,
+          }));
+    resourceClient =
+      options.resourceClient ??
+      (options.httpServer
+        ? undefined
+        : await createLarkResourceClient(config, {
+            channelFactory: options.resourceChannelFactory,
+          }));
+  } catch (error) {
+    writeLog("daemon_start_failed", {
+      message: error instanceof Error ? error.message : String(error),
     });
-  const reactionClient =
-    options.reactionClient ??
-    (options.httpServer
-      ? undefined
-      : await createLarkReactionClient(config, {
-          channelFactory: options.reactionChannelFactory,
-        }));
-  const messageClient =
-    options.messageClient ??
-    (options.httpServer
-      ? undefined
-      : await createLarkMessageClient(config, {
-          channelFactory: options.messageChannelFactory,
-        }));
-  const chatClient =
-    options.chatClient ??
-    (options.httpServer
-      ? undefined
-      : await createLarkChatClient(config, {
-          channelFactory: options.chatChannelFactory,
-        }));
-  const chatContextClient =
-    options.chatContextClient ??
-    (options.httpServer
-      ? undefined
-      : await createLarkChatContextClient(config, {
-          channelFactory: options.chatContextChannelFactory,
-        }));
-  const chatMembersClient =
-    options.chatMembersClient ??
-    (options.httpServer
-      ? undefined
-      : await createLarkChatMembersClient(config, {
-          channelFactory: options.chatMembersChannelFactory,
-        }));
-  const resourceClient =
-    options.resourceClient ??
-    (options.httpServer
-      ? undefined
-      : await createLarkResourceClient(config, {
-          channelFactory: options.resourceChannelFactory,
-        }));
+    throw error;
+  }
 
   let idleTimer;
   let resolveClosed;
@@ -93,6 +123,7 @@ export async function startDaemon(config, options = {}) {
     if (closePromise) return closePromise;
 
     closePromise = (async () => {
+      writeLog("daemon_stopping");
       if (idleTimer) clearTimeout(idleTimer);
       await channelRunner.stop?.();
       await reactionClient?.close?.();
@@ -102,6 +133,7 @@ export async function startDaemon(config, options = {}) {
       await chatMembersClient?.close?.();
       await resourceClient?.close?.();
       await httpServer.close();
+      writeLog("daemon_stopped");
       resolveClosed();
     })();
 
@@ -121,8 +153,21 @@ export async function startDaemon(config, options = {}) {
     idleTimer.unref?.();
   }
 
-  await channelRunner.start();
-  const address = await httpServer.listen();
+  let address;
+  try {
+    await channelRunner.start();
+    address = await httpServer.listen();
+  } catch (error) {
+    writeLog("daemon_start_failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+  writeLog("daemon_started", {
+    host: address.host,
+    port: address.port,
+    idleTimeoutMs: config.daemonIdleTimeoutMs,
+  });
   scheduleIdleCheck();
 
   return {

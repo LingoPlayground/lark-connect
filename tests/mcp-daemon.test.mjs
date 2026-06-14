@@ -329,6 +329,47 @@ describe("mcp daemon tools", () => {
     });
   });
 
+  it("marks MCP poll and wait calls before forwarding them to the daemon client", async () => {
+    const observed = [];
+    const runtime = {
+      createDaemonHttpClientImpl: () => ({
+        pollMessages: async (agentSessionId, options) => {
+          observed.push({ method: "poll", agentSessionId, options });
+          return { messages: [] };
+        },
+        waitForMessages: async (agentSessionId, options) => {
+          observed.push({ method: "wait", agentSessionId, options });
+          return { messages: [] };
+        },
+      }),
+    };
+
+    await handleMcpMessage(
+      toolCall("lark_connect_poll_messages", { agentSessionId: "thread_a" }),
+      runtime,
+    );
+    await handleMcpMessage(
+      toolCall("lark_connect_wait_messages", {
+        agentSessionId: "thread_a",
+        timeoutMs: 60_000,
+      }),
+      runtime,
+    );
+
+    assert.deepEqual(observed, [
+      {
+        method: "poll",
+        agentSessionId: "thread_a",
+        options: { clientKind: "mcp" },
+      },
+      {
+        method: "wait",
+        agentSessionId: "thread_a",
+        options: { timeoutMs: 60_000, clientKind: "mcp" },
+      },
+    ]);
+  });
+
   it("returns chat context failures as structured tool errors", async () => {
     const sessionNotBound = await handleMcpMessage(
       toolCall("lark_connect_get_chat_context", { agentSessionId: "thread_unbound" }),

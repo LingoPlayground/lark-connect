@@ -58,6 +58,15 @@ npx -y curiosea-lark-connect@latest daemon start
 npx -y curiosea-lark-connect@latest daemon status
 ```
 
+排查监听或投递时查看最近结构化日志：
+
+```bash
+npx -y curiosea-lark-connect@latest logs --tail 50
+npx -y curiosea-lark-connect@latest logs --agent-session-id <绑定时使用的 agentSessionId> --tail 50
+```
+
+不带 `--agent-session-id` 时读取 daemon 日志，主要用于确认守护进程启动、停止、未绑定聊天事件和单聊发现事件。带 `--agent-session-id` 时读取对应会话日志，主要用于确认消息入队、等待、投递、确认，以及已绑定聊天里的路由决策。
+
 ## 规则
 
 - 不要把应用密钥回显给用户。

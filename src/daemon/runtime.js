@@ -20,6 +20,7 @@ function countMessages(messages, status) {
 
 export function createDaemonRuntime(options = {}) {
   const now = options.now ?? (() => Date.now());
+  const logger = options.logger ?? { write() {} };
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const directChatSignalBufferTtlMs =
     options.directChatSignalBufferTtlMs ?? DEFAULT_DIRECT_CHAT_SIGNAL_BUFFER_TTL_MS;
@@ -34,6 +35,14 @@ export function createDaemonRuntime(options = {}) {
 
   function touch() {
     lastActivityAt = now();
+  }
+
+  function writeLog(event, details = {}) {
+    try {
+      logger.write(event, details);
+    } catch {
+      // Logging is diagnostic only; it must not break message delivery.
+    }
   }
 
   function getOrCreateSession(agentSessionId) {
@@ -293,8 +302,21 @@ export function createDaemonRuntime(options = {}) {
     return signal;
   }
 
-  function deliverPendingMessages(agentSessionId) {
+  function getSessionDiagnostics(agentSessionId) {
     const session = getBoundSession(agentSessionId);
+    const messages = Array.from(session.messages.values());
+    return {
+      agentSessionId,
+      pendingCount: countMessages(messages, "pending"),
+      deliveredCount: countMessages(messages, "delivered"),
+      acknowledgedCount: countMessages(messages, "acknowledged"),
+      waiterCount: waitersBySessionId.get(agentSessionId)?.length ?? 0,
+    };
+  }
+
+  function deliverPendingMessages(agentSessionId, options = {}) {
+    const session = getBoundSession(agentSessionId);
+    const deliverySource = options.deliverySource ?? "unknown";
 
     const deliveredAt = now();
     const messages = [];
@@ -303,6 +325,13 @@ export function createDaemonRuntime(options = {}) {
       message.status = "delivered";
       message.deliveredAt = deliveredAt;
       messages.push(serializeMessage(message));
+    }
+    if (messages.length > 0) {
+      writeLog("message_delivered", {
+        agentSessionId,
+        deliverySource,
+        messageIds: messages.map((message) => message.larkMessageId),
+      });
     }
     return messages;
   }
@@ -320,11 +349,19 @@ export function createDaemonRuntime(options = {}) {
     if (!waiters) return;
 
     while (waiters.length > 0) {
-      const messages = deliverPendingMessages(agentSessionId);
+      const waiter = waiters[0];
+      const messages = deliverPendingMessages(agentSessionId, {
+        deliverySource: waiter.deliverySource,
+      });
       if (messages.length === 0) return;
-      const waiter = waiters.shift();
+      waiters.shift();
       clearTimeout(waiter.timeout);
       waiter.resolve(messages);
+      writeLog("wait_resolved", {
+        agentSessionId,
+        deliverySource: waiter.deliverySource,
+        messageIds: messages.map((message) => message.larkMessageId),
+      });
     }
 
     waitersBySessionId.delete(agentSessionId);
@@ -381,6 +418,7 @@ export function createDaemonRuntime(options = {}) {
       };
       bindingsByChatId.set(next.chatId, binding);
       getOrCreateSession(next.agentSessionId);
+      writeLog("binding_created", serializeBinding(binding));
       return serializeBinding(binding);
     },
 
@@ -389,6 +427,13 @@ export function createDaemonRuntime(options = {}) {
 
       const binding = bindingsByChatId.get(payload.chatId);
       const directMessage = payload.chatType === "p2p";
+      writeLog("lark_event_received", {
+        agentSessionId: binding?.agentSessionId,
+        messageId: payload.messageId,
+        chatId: payload.chatId,
+        chatType: payload.chatType,
+        mentionedBot: Boolean(payload.mentionedBot),
+      });
       if (!binding && directMessage) {
         pruneDirectChatSignalBuffer();
         if (
@@ -429,6 +474,12 @@ export function createDaemonRuntime(options = {}) {
         receivedAt: now(),
       };
       session.messages.set(id, message);
+      writeLog("message_enqueued", {
+        agentSessionId: binding.agentSessionId,
+        chatId: payload.chatId,
+        messageId: id,
+        larkMessageId: id,
+      });
       flushWaiters(binding.agentSessionId);
       return { accepted: true, message: serializeMessage(message) };
     },
@@ -453,31 +504,59 @@ export function createDaemonRuntime(options = {}) {
       });
     },
 
-    pollMessages(agentSessionId) {
+    pollMessages(agentSessionId, options = {}) {
       touch();
-      return deliverPendingMessages(agentSessionId);
+      return deliverPendingMessages(agentSessionId, {
+        deliverySource: options.deliverySource,
+      });
     },
 
     waitForMessages(agentSessionId, options = {}) {
       touch();
 
-      const messages = deliverPendingMessages(agentSessionId);
-      if (messages.length > 0) return Promise.resolve(messages);
+      const deliverySource = options.deliverySource ?? "unknown_wait";
+      const messages = deliverPendingMessages(agentSessionId, { deliverySource });
+      if (messages.length > 0) {
+        writeLog("wait_resolved", {
+          agentSessionId,
+          deliverySource,
+          messageIds: messages.map((message) => message.larkMessageId),
+        });
+        return Promise.resolve(messages);
+      }
 
-      const timeoutMs = options.timeoutMs ?? 30_000;
-      if (timeoutMs <= 0) return Promise.resolve([]);
+      const timeoutMs = normalizeTimeoutMs(options.timeoutMs, 30_000);
+      if (timeoutMs <= 0) {
+        writeLog("wait_timeout", {
+          agentSessionId,
+          deliverySource,
+          timeoutMs,
+        });
+        return Promise.resolve([]);
+      }
 
       return new Promise((resolve) => {
         const waiter = {
+          deliverySource,
           resolve,
           timeout: setTimeout(() => {
             removeWaiter(agentSessionId, waiter);
+            writeLog("wait_timeout", {
+              agentSessionId,
+              deliverySource,
+              timeoutMs,
+            });
             resolve([]);
           }, timeoutMs),
         };
         const waiters = waitersBySessionId.get(agentSessionId) ?? [];
         waiters.push(waiter);
         waitersBySessionId.set(agentSessionId, waiters);
+        writeLog("wait_registered", {
+          agentSessionId,
+          deliverySource,
+          timeoutMs,
+        });
       });
     },
 
@@ -499,6 +578,11 @@ export function createDaemonRuntime(options = {}) {
 
       message.status = "acknowledged";
       message.acknowledgedAt = now();
+      writeLog("message_acknowledged", {
+        agentSessionId,
+        messageId: message.id,
+        larkMessageId: message.larkMessageId,
+      });
       return serializeMessage(message);
     },
 
@@ -532,6 +616,7 @@ export function createDaemonRuntime(options = {}) {
       return snapshot();
     },
 
+    getSessionDiagnostics,
     snapshot,
   };
 }

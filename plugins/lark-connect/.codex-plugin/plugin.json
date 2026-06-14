@@ -1,6 +1,6 @@
 {
   "name": "lark-connect",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "通过本地模型上下文协议服务，把 Codex 和 Claude Code 会话连接到飞书或 Lark 聊天，让智能体搜索群聊、发现单聊、读取聊天上下文、查询成员和机器人、@ 协作者并长时间响应聊天消息。",
   "author": {
     "name": "LingoPlayground",

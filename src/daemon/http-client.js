@@ -7,6 +7,12 @@ async function parseJsonResponse(response) {
   return JSON.parse(text);
 }
 
+function appendClientKind(query, options = {}) {
+  if (options.clientKind !== undefined) {
+    query.set("client_kind", String(options.clientKind));
+  }
+}
+
 export function createDaemonHttpClient(options = {}) {
   const host = options.host ?? DEFAULT_DAEMON_HOST;
   const port = options.port ?? DEFAULT_DAEMON_PORT;
@@ -68,13 +74,17 @@ export function createDaemonHttpClient(options = {}) {
       });
     },
 
-    pollMessages(agentSessionId) {
-      return request(`/sessions/${encodeURIComponent(agentSessionId)}/messages`);
+    pollMessages(agentSessionId, options = {}) {
+      const query = new URLSearchParams();
+      appendClientKind(query, options);
+      const suffix = query.size > 0 ? `?${query}` : "";
+      return request(`/sessions/${encodeURIComponent(agentSessionId)}/messages${suffix}`);
     },
 
     waitForMessages(agentSessionId, options = {}) {
       const query = new URLSearchParams();
       if (options.timeoutMs !== undefined) query.set("timeout_ms", String(options.timeoutMs));
+      appendClientKind(query, options);
       const suffix = query.size > 0 ? `?${query}` : "";
       return request(
         `/sessions/${encodeURIComponent(agentSessionId)}/messages/wait${suffix}`,

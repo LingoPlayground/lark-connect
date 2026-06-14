@@ -198,19 +198,62 @@ function waitTimeoutNextSteps(agentSessionId) {
   const backgroundWaitCommand =
     `npx -y curiosea-lark-connect@latest wait --agent-session-id ${agentSessionId} --timeout-ms 300000`;
   return [
-    "没有收到新消息。继续调用 lark_connect_wait_messages 做下一轮短等待，或建立约 5 分钟的心跳。",
-    `Codex 使用 thread automation 创建约 5 分钟后的定时唤醒；唤醒后先调用 lark_connect_poll_messages，agentSessionId 使用 ${agentSessionId}。如果 poll 有消息，处理、回复、ack 后再调用 lark_connect_wait_messages；如果 poll 仍然没有消息，继续下一轮心跳或改用 lark_connect_wait_messages 做短等待。`,
-    `Claude Code 使用 background shell 运行 ${backgroundWaitCommand}。命令输出有消息时，处理、回复、ack 后再调用 lark_connect_wait_messages；如果输出仍然没有消息，继续启动下一轮 background shell。`,
-    `除非有人明确要求停止，不要把 agentSessionId ${agentSessionId} 的这次超时当作监听结束。`,
+    `没有收到新消息。优先继续调用 lark_connect_wait_messages 做下一轮约 1 分钟短等待；除非有人明确要求停止，不要把 agentSessionId ${agentSessionId} 的这次超时当作监听结束。`,
+    `如果当前会话可能无人值守，才建立约 5 分钟心跳。Codex 使用 thread automation 创建定时唤醒；唤醒后先调用 lark_connect_poll_messages，agentSessionId 使用 ${agentSessionId}。如果 poll 有消息，处理、回复、ack 后再调用 lark_connect_wait_messages；如果 poll 仍然没有消息，继续短等待或建立下一轮心跳。`,
+    `Claude Code 在无人值守心跳场景可以使用 background shell 运行 ${backgroundWaitCommand}。命令输出有消息时，处理、回复、ack 后再调用 lark_connect_wait_messages；如果输出仍然没有消息，回到两个选项：继续调用 lark_connect_wait_messages，或再次建立约 5 分钟心跳。`,
   ];
 }
 
-function waitMessagesBody(agentSessionId, messages) {
-  const body = { messages };
+function waitMessagesBody(agentSessionId, messages, diagnostics) {
+  const body = { messages, diagnostics };
   if (messages.length === 0) {
     body.nextSteps = waitTimeoutNextSteps(agentSessionId);
   }
   return body;
+}
+
+function normalizeClientKind(value) {
+  const text = String(value ?? "").trim();
+  if (text === "mcp" || text === "cli") return text;
+  return "unknown";
+}
+
+function createDeliverySource(clientKind, operation) {
+  return `${clientKind}_${operation}`;
+}
+
+function createMessageDiagnostics(input) {
+  return {
+    operation: input.operation,
+    clientKind: input.clientKind,
+    deliverySource: input.deliverySource,
+    result: input.messages.length > 0 ? "messages" : input.emptyResult,
+    timeoutMs: input.timeoutMs,
+    queueBefore: input.queueBefore,
+    queueAfter: input.queueAfter,
+    deliveredMessageIds: input.messages.map((message) => message.larkMessageId),
+  };
+}
+
+function safeSessionDiagnostics(runtime, agentSessionId) {
+  try {
+    return {
+      sessionBound: true,
+      ...runtime.getSessionDiagnostics(agentSessionId),
+    };
+  } catch (error) {
+    if (error instanceof DaemonRuntimeError && error.code === DAEMON_ERROR_CODES.SESSION_NOT_BOUND) {
+      return {
+        sessionBound: false,
+        agentSessionId,
+        pendingCount: 0,
+        deliveredCount: 0,
+        acknowledgedCount: 0,
+        waiterCount: 0,
+      };
+    }
+    throw error;
+  }
 }
 
 function requireBoundChat(runtime, agentSessionId) {
@@ -737,17 +780,51 @@ export function createDaemonHttpServer(options = {}) {
 
       const messagesRoute = routeSessionMessages(pathname);
       if (request.method === "GET" && messagesRoute) {
+        const clientKind = normalizeClientKind(url.searchParams.get("client_kind"));
+        const operation = messagesRoute.wait ? "wait" : "poll";
+        const deliverySource = createDeliverySource(clientKind, operation);
+        const queueBefore = safeSessionDiagnostics(runtime, messagesRoute.agentSessionId);
         if (messagesRoute.wait) {
           const timeoutMs = Number(url.searchParams.get("timeout_ms") ?? 30_000);
           const messages = await runtime.waitForMessages(messagesRoute.agentSessionId, {
             timeoutMs,
+            deliverySource,
           });
-          sendJson(response, 200, waitMessagesBody(messagesRoute.agentSessionId, messages));
+          const queueAfter = safeSessionDiagnostics(runtime, messagesRoute.agentSessionId);
+          sendJson(
+            response,
+            200,
+            waitMessagesBody(
+              messagesRoute.agentSessionId,
+              messages,
+              createMessageDiagnostics({
+                operation,
+                clientKind,
+                deliverySource,
+                emptyResult: "timeout",
+                timeoutMs,
+                queueBefore,
+                queueAfter,
+                messages,
+              }),
+            ),
+          );
           return;
         }
 
+        const messages = runtime.pollMessages(messagesRoute.agentSessionId, { deliverySource });
+        const queueAfter = safeSessionDiagnostics(runtime, messagesRoute.agentSessionId);
         sendJson(response, 200, {
-          messages: runtime.pollMessages(messagesRoute.agentSessionId),
+          messages,
+          diagnostics: createMessageDiagnostics({
+            operation,
+            clientKind,
+            deliverySource,
+            emptyResult: "empty",
+            queueBefore,
+            queueAfter,
+            messages,
+          }),
         });
         return;
       }

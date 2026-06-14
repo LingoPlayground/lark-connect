@@ -430,34 +430,127 @@ describe("daemon http server", () => {
       await server.client.bindSession(binding());
       server.runtime.receiveLarkMessage(larkMessage({ messageId: "om_poll" }));
 
-      const polled = await server.client.pollMessages("thread_a");
+      const polled = await server.client.pollMessages("thread_a", { clientKind: "mcp" });
       assert.deepEqual(
         polled.messages.map((message) => message.larkMessageId),
         ["om_poll"],
       );
+      assert.equal(polled.diagnostics.operation, "poll");
+      assert.equal(polled.diagnostics.clientKind, "mcp");
+      assert.equal(polled.diagnostics.deliverySource, "mcp_poll");
+      assert.equal(polled.diagnostics.result, "messages");
+      assert.equal(polled.diagnostics.queueBefore.pendingCount, 1);
+      assert.equal(polled.diagnostics.queueAfter.deliveredCount, 1);
+      assert.deepEqual(polled.diagnostics.deliveredMessageIds, ["om_poll"]);
 
       await server.client.ackMessage("om_poll", { agentSessionId: "thread_a" });
       const statusAfterAck = await server.client.status();
       assert.equal(statusAfterAck.sessions[0].messages[0].status, "acknowledged");
 
-      const emptyWait = await server.client.waitForMessages("thread_a", { timeoutMs: 0 });
+      const emptyWait = await server.client.waitForMessages("thread_a", {
+        timeoutMs: 0,
+        clientKind: "mcp",
+      });
       assert.deepEqual(emptyWait.messages, []);
-      assert.match(emptyWait.nextSteps.join("\n"), /继续调用 lark_connect_wait_messages/);
-      assert.match(emptyWait.nextSteps.join("\n"), /心跳/);
+      assert.equal(emptyWait.diagnostics.operation, "wait");
+      assert.equal(emptyWait.diagnostics.clientKind, "mcp");
+      assert.equal(emptyWait.diagnostics.deliverySource, "mcp_wait");
+      assert.equal(emptyWait.diagnostics.result, "timeout");
+      assert.equal(emptyWait.diagnostics.timeoutMs, 0);
+      assert.equal(emptyWait.diagnostics.queueBefore.acknowledgedCount, 1);
+      assert.equal(emptyWait.diagnostics.queueAfter.pendingCount, 0);
+      assert.match(emptyWait.nextSteps.join("\n"), /优先继续调用 lark_connect_wait_messages/);
+      assert.match(emptyWait.nextSteps.join("\n"), /无人值守/);
       assert.match(
         emptyWait.nextSteps.join("\n"),
         /npx -y curiosea-lark-connect@latest wait --agent-session-id thread_a --timeout-ms 300000/,
       );
       assert.doesNotMatch(emptyWait.nextSteps.join("\n"), /<绑定时使用的 agentSessionId>/);
       assert.match(emptyWait.nextSteps.join("\n"), /唤醒后先调用 lark_connect_poll_messages/);
+      assert.doesNotMatch(emptyWait.nextSteps.join("\n"), /继续启动下一轮 background shell/);
 
       server.runtime.receiveLarkMessage(larkMessage({ messageId: "om_wait_ready" }));
-      const readyWait = await server.client.waitForMessages("thread_a", { timeoutMs: 0 });
+      const readyWait = await server.client.waitForMessages("thread_a", {
+        timeoutMs: 0,
+        clientKind: "mcp",
+      });
       assert.deepEqual(
         readyWait.messages.map((message) => message.larkMessageId),
         ["om_wait_ready"],
       );
+      assert.equal(readyWait.diagnostics.operation, "wait");
+      assert.equal(readyWait.diagnostics.deliverySource, "mcp_wait");
+      assert.equal(readyWait.diagnostics.result, "messages");
+      assert.equal(readyWait.diagnostics.queueBefore.pendingCount, 1);
+      assert.deepEqual(readyWait.diagnostics.deliveredMessageIds, ["om_wait_ready"]);
       assert.equal(readyWait.nextSteps, undefined);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("marks missing or unsupported client kinds as unknown diagnostics", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+
+      server.runtime.receiveLarkMessage(larkMessage({ messageId: "om_unknown_poll" }));
+      const polled = await server.client.pollMessages("thread_a");
+      assert.equal(polled.diagnostics.clientKind, "unknown");
+      assert.equal(polled.diagnostics.deliverySource, "unknown_poll");
+
+      const response = await fetch(
+        `http://${server.address.host}:${server.address.port}/sessions/thread_a/messages/wait?timeout_ms=0&client_kind=browser`,
+      );
+      const waited = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(waited.diagnostics.clientKind, "unknown");
+      assert.equal(waited.diagnostics.deliverySource, "unknown_wait");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("returns an empty wait result when the session is replaced while waiting", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+
+      const pending = server.client.waitForMessages("thread_a", {
+        timeoutMs: 1_000,
+        clientKind: "mcp",
+      });
+      await server.client.bindSession(
+        binding({
+          chatId: "oc_replacement",
+          agentSessionId: "thread_b",
+          replace: true,
+        }),
+      );
+
+      const result = await pending;
+
+      assert.deepEqual(result.messages, []);
+      assert.equal(result.diagnostics.result, "timeout");
+      assert.equal(result.diagnostics.queueAfter.sessionBound, false);
+      assert.equal(result.diagnostics.queueAfter.agentSessionId, "thread_a");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid wait timeout query values", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () => server.client.waitForMessages("thread_a", { timeoutMs: "not-a-number" }),
+        (error) =>
+          error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+          error?.status === 400 &&
+          error?.details?.field === "timeoutMs",
+      );
     } finally {
       await server.close();
     }
@@ -572,7 +665,9 @@ describe("daemon http server", () => {
         larkMessage({ messageId: "om_no_mention", mentionedBot: false }),
       );
 
-      assert.deepEqual(await server.client.pollMessages("thread_a"), { messages: [] });
+      const polled = await server.client.pollMessages("thread_a");
+      assert.deepEqual(polled.messages, []);
+      assert.equal(polled.diagnostics.result, "empty");
       await assert.rejects(
         () => server.client.ackMessage("om_no_mention", { agentSessionId: "thread_a" }),
         (error) => error?.code === "MESSAGE_NOT_FOUND" && error?.status === 404,
