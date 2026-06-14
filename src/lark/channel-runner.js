@@ -7,31 +7,58 @@ export function createLarkChannelRunner(config, options = {}) {
   if (!runtime) throw new Error("runtime is required for lark channel runner");
 
   const channelFactory = options.channelFactory ?? createDefaultLarkChannel;
-  let channel;
-  let unsubscribe;
-  let started = false;
+  const state = {
+    channel: undefined,
+    startPromise: undefined,
+    unsubscribe: undefined,
+    started: false,
+  };
+
+  async function createConnectedChannel() {
+    const nextChannel = await channelFactory(config);
+    const nextUnsubscribe = nextChannel.on("message", (message) => {
+      runtime.receiveLarkMessage(normalizeMessage(message));
+    });
+
+    try {
+      await nextChannel.connect();
+    } catch (error) {
+      nextUnsubscribe();
+      await nextChannel.disconnect?.();
+      throw error;
+    }
+
+    return { channel: nextChannel, unsubscribe: nextUnsubscribe };
+  }
+
+  function storeConnectedChannel(connectedChannel) {
+    state.channel = connectedChannel.channel;
+    state.unsubscribe = connectedChannel.unsubscribe;
+    state.started = true;
+    return { state: "connected" };
+  }
 
   return {
     async start() {
-      if (started) return { state: "connected" };
+      if (state.started) return { state: "connected" };
 
-      channel = await channelFactory(config);
-      unsubscribe = channel.on("message", (message) => {
-        runtime.receiveLarkMessage(normalizeMessage(message));
-      });
-      await channel.connect();
-      started = true;
-      return { state: "connected" };
+      state.startPromise ??= createConnectedChannel()
+        .then(storeConnectedChannel)
+        .finally(() => {
+          state.startPromise = undefined;
+        });
+      return state.startPromise;
     },
 
     async stop() {
-      if (unsubscribe) {
-        unsubscribe();
-        unsubscribe = undefined;
+      await state.startPromise;
+      if (state.unsubscribe) {
+        state.unsubscribe();
+        state.unsubscribe = undefined;
       }
-      await channel?.disconnect?.();
-      channel = undefined;
-      started = false;
+      await state.channel?.disconnect?.();
+      state.channel = undefined;
+      state.started = false;
     },
   };
 }

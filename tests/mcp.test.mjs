@@ -36,7 +36,9 @@ function createMcpClient() {
       const started = Date.now();
       while (Date.now() - started < 2000) {
         if (responses.length > 0) return responses.shift();
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 10);
+        });
       }
       throw new Error("Timed out waiting for MCP response");
     },
