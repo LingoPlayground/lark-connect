@@ -708,6 +708,129 @@ describe("daemon http server", () => {
     }
   });
 
+  it("gets chat members for the bound agent session", async () => {
+    const observedMemberRequests = [];
+    const server = await createTestServer({
+      chatMembersClient: {
+        async getChatMembers(input) {
+          observedMemberRequests.push(input);
+          return {
+            chatId: input.chatId,
+            pageSize: input.pageSize,
+            memberIdType: "open_id",
+            members: [{ memberId: "ou_human", memberType: "user", name: "产品经理" }],
+            bots: [{ appId: "cli_other_bot", memberType: "bot", source: "recent_message_sender" }],
+            botCoverage: "partial",
+            botSources: ["recent_message_sender"],
+            notes: ["bot list is partial"],
+            hasMore: false,
+            pageToken: "",
+          };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      const result = await server.client.getChatMembers("thread_a", {
+        pageSize: 20,
+        botHistoryLimit: 10,
+      });
+
+      assert.deepEqual(observedMemberRequests, [
+        {
+          chatId: "oc_target",
+          pageSize: 20,
+          pageToken: undefined,
+          botHistoryLimit: 10,
+        },
+      ]);
+      assert.deepEqual(result.roster.members.map((member) => member.memberId), ["ou_human"]);
+      assert.deepEqual(result.roster.bots.map((bot) => bot.appId), ["cli_other_bot"]);
+      assert.equal(result.roster.botCoverage, "partial");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects invalid chat member requests before calling Feishu", async () => {
+    const observedMemberRequests = [];
+    const server = await createTestServer({
+      chatMembersClient: {
+        async getChatMembers(input) {
+          observedMemberRequests.push(input);
+          return { chatId: input.chatId, members: [], bots: [] };
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      for (const input of [
+        { pageSize: 0 },
+        { pageToken: { bad: true } },
+        { botHistoryLimit: -1 },
+      ]) {
+        await assert.rejects(
+          () => server.client.getChatMembers("thread_a", input),
+          (error) =>
+            error?.code === DAEMON_ERROR_CODES.INVALID_REQUEST &&
+            error?.status === 400,
+        );
+      }
+      assert.deepEqual(observedMemberRequests, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("does not get chat members when the agent session is not bound", async () => {
+    const observedMemberRequests = [];
+    const server = await createTestServer({
+      chatMembersClient: {
+        async getChatMembers(input) {
+          observedMemberRequests.push(input);
+          return { chatId: input.chatId, members: [], bots: [] };
+        },
+      },
+    });
+    try {
+      await assert.rejects(
+        () => server.client.getChatMembers("thread_unbound"),
+        (error) =>
+          error?.code === "SESSION_NOT_BOUND" &&
+          error?.status === 404 &&
+          error?.details?.agentSessionId === "thread_unbound",
+      );
+      assert.deepEqual(observedMemberRequests, []);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reports chat member failures", async () => {
+    const server = await createTestServer({
+      chatMembersClient: {
+        async getChatMembers() {
+          throw new Error("permission denied");
+        },
+      },
+    });
+    try {
+      await server.client.bindSession(binding());
+
+      await assert.rejects(
+        () => server.client.getChatMembers("thread_a"),
+        (error) =>
+          error?.code === "LARK_CHAT_MEMBERS_FAILED" &&
+          error?.status === 502 &&
+          /permission denied/.test(error.message),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   it("sends a text message to the chat bound to an agent session", async () => {
     const observedMessages = [];
     const server = await createTestServer({

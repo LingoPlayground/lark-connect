@@ -5,6 +5,11 @@ import {
   DEFAULT_CHAT_CONTEXT_LIMIT,
   MAX_CHAT_CONTEXT_LIMIT,
 } from "../lark/chat-context.js";
+import {
+  DEFAULT_CHAT_MEMBERS_PAGE_SIZE,
+  MAX_CHAT_MEMBERS_BOT_HISTORY_LIMIT,
+  MAX_CHAT_MEMBERS_PAGE_SIZE,
+} from "../lark/chat-members.js";
 import { MAX_CHAT_SEARCH_PAGE_SIZE } from "../lark/chats.js";
 import { DEFAULT_ACK_REACTION_EMOJI_TYPE } from "../lark/reactions.js";
 import { createDaemonRuntime } from "./runtime.js";
@@ -24,6 +29,7 @@ function statusForError(error) {
   if (error?.code === DAEMON_ERROR_CODES.LARK_SEND_FAILED) return 502;
   if (error?.code === DAEMON_ERROR_CODES.LARK_CHAT_SEARCH_FAILED) return 502;
   if (error?.code === DAEMON_ERROR_CODES.LARK_CHAT_CONTEXT_FAILED) return 502;
+  if (error?.code === DAEMON_ERROR_CODES.LARK_CHAT_MEMBERS_FAILED) return 502;
   if (error?.code === DAEMON_ERROR_CODES.LARK_RESOURCE_DOWNLOAD_FAILED) return 502;
   return 500;
 }
@@ -108,6 +114,16 @@ function routeSessionSendMessage(pathname) {
 function routeSessionChatContext(pathname) {
   const parts = pathname.split("/").filter(Boolean);
   if (parts[0] !== "sessions" || parts[2] !== "chat-context" || parts.length !== 3) {
+    return undefined;
+  }
+  return {
+    agentSessionId: decodeURIComponent(parts[1]),
+  };
+}
+
+function routeSessionChatMembers(pathname) {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "sessions" || parts[2] !== "chat-members" || parts.length !== 3) {
     return undefined;
   }
   return {
@@ -298,6 +314,44 @@ function normalizeOptionalChatContextLimit(value) {
   return limit;
 }
 
+function normalizeOptionalChatMembersPageSize(value) {
+  if (value === undefined) return DEFAULT_CHAT_MEMBERS_PAGE_SIZE;
+
+  const pageSize = Number(value);
+  if (
+    !Number.isInteger(pageSize) ||
+    pageSize < 1 ||
+    pageSize > MAX_CHAT_MEMBERS_PAGE_SIZE
+  ) {
+    const error = new Error(
+      `pageSize must be an integer between 1 and ${MAX_CHAT_MEMBERS_PAGE_SIZE}`,
+    );
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+
+  return pageSize;
+}
+
+function normalizeOptionalBotHistoryLimit(value) {
+  if (value === undefined) return undefined;
+
+  const limit = Number(value);
+  if (
+    !Number.isInteger(limit) ||
+    limit < 0 ||
+    limit > MAX_CHAT_MEMBERS_BOT_HISTORY_LIMIT
+  ) {
+    const error = new Error(
+      `botHistoryLimit must be an integer between 0 and ${MAX_CHAT_MEMBERS_BOT_HISTORY_LIMIT}`,
+    );
+    error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
+    throw error;
+  }
+
+  return limit;
+}
+
 function invalidRequest(message, details) {
   const error = new Error(message);
   error.code = DAEMON_ERROR_CODES.INVALID_REQUEST;
@@ -385,6 +439,18 @@ function createChatContextError(cause, agentSessionId, chatId) {
   const causeMessage = cause instanceof Error ? cause.message : String(cause);
   const error = new Error(`failed to get Feishu chat context for ${chatId}: ${causeMessage}`);
   error.code = DAEMON_ERROR_CODES.LARK_CHAT_CONTEXT_FAILED;
+  error.cause = cause;
+  error.details = {
+    agentSessionId,
+    chatId,
+  };
+  return error;
+}
+
+function createChatMembersError(cause, agentSessionId, chatId) {
+  const causeMessage = cause instanceof Error ? cause.message : String(cause);
+  const error = new Error(`failed to get Feishu chat members for ${chatId}: ${causeMessage}`);
+  error.code = DAEMON_ERROR_CODES.LARK_CHAT_MEMBERS_FAILED;
   error.cause = cause;
   error.details = {
     agentSessionId,
@@ -484,6 +550,33 @@ async function getChatContext(chatContextClient, agentSessionId, chatId, body) {
   } catch (cause) {
     if (cause?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) throw cause;
     throw createChatContextError(cause, agentSessionId, chatId);
+  }
+}
+
+async function getChatMembers(chatMembersClient, agentSessionId, chatId, body) {
+  const input = requireObjectBody(body);
+  const pageSize = normalizeOptionalChatMembersPageSize(input.pageSize);
+  const pageToken = normalizeOptionalStringField(input.pageToken, "pageToken");
+  const botHistoryLimit = normalizeOptionalBotHistoryLimit(input.botHistoryLimit);
+
+  if (!chatMembersClient?.getChatMembers) {
+    throw createChatMembersError(
+      new Error("chat members client is unavailable"),
+      agentSessionId,
+      chatId,
+    );
+  }
+
+  try {
+    return await chatMembersClient.getChatMembers({
+      chatId,
+      pageSize,
+      pageToken,
+      botHistoryLimit,
+    });
+  } catch (cause) {
+    if (cause?.code === DAEMON_ERROR_CODES.INVALID_REQUEST) throw cause;
+    throw createChatMembersError(cause, agentSessionId, chatId);
   }
 }
 
@@ -634,6 +727,7 @@ export function createDaemonHttpServer(options = {}) {
   const messageClient = options.messageClient;
   const chatClient = options.chatClient;
   const chatContextClient = options.chatContextClient;
+  const chatMembersClient = options.chatMembersClient;
   const resourceClient = options.resourceClient;
   const ackReactionEmojiType = options.ackReactionEmojiType ?? DEFAULT_ACK_REACTION_EMOJI_TYPE;
 
@@ -710,6 +804,20 @@ export function createDaemonHttpServer(options = {}) {
           body,
         );
         sendJson(response, 200, { context });
+        return;
+      }
+
+      const chatMembersRoute = routeSessionChatMembers(pathname);
+      if (request.method === "POST" && chatMembersRoute) {
+        const body = await readJsonBody(request);
+        const chatId = requireBoundChat(runtime, chatMembersRoute.agentSessionId);
+        const roster = await getChatMembers(
+          chatMembersClient,
+          chatMembersRoute.agentSessionId,
+          chatId,
+          body,
+        );
+        sendJson(response, 200, { roster });
         return;
       }
 

@@ -99,6 +99,29 @@ const TOOLS = [
     },
   },
   {
+    name: "lark_connect_get_chat_members",
+    description:
+      "Read human members and recognizable recent bot/app senders from the Feishu chat bound to one Codex or Claude Code session.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
+        pageSize: {
+          type: "number",
+          description: "Maximum number of human members to return. Defaults to 50.",
+        },
+        pageToken: { type: "string", description: "Optional pagination token from a prior member read." },
+        botHistoryLimit: {
+          type: "number",
+          description:
+            "Recent chat messages to scan for app/bot senders. Defaults to 20 because Feishu member APIs do not return bots.",
+        },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "lark_connect_poll_messages",
     description: "Immediately poll pending Feishu messages for one bound agent session.",
     inputSchema: {
@@ -354,6 +377,16 @@ async function handleToolCall(params, runtime) {
         await client.getChatContext(args.agentSessionId, {
           limit: args.limit,
           pageToken: args.pageToken,
+        }),
+      );
+    }
+
+    if (params?.name === "lark_connect_get_chat_members") {
+      return jsonResult(
+        await client.getChatMembers(args.agentSessionId, {
+          pageSize: args.pageSize,
+          pageToken: args.pageToken,
+          botHistoryLimit: args.botHistoryLimit,
         }),
       );
     }

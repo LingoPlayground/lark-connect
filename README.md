@@ -13,6 +13,7 @@
 - 群聊消息只有真实提及机器人时才会进入队列；已绑定单聊不要求提及机器人。
 - 群聊可以通过 `lark_connect_search_chats` 搜索；单聊可以让用户给机器人私聊发送挑战码，再用 `lark_connect_wait_direct_chat_signal` 发现 `chatId`。
 - 绑定后可以通过 `lark_connect_get_chat_context` 读取近期聊天上下文，默认最近 10 条消息。
+- 绑定后可以通过 `lark_connect_get_chat_members` 查询群里的人类成员，并补充当前应用和近期消息里可识别的机器人或应用发送者；飞书成员接口不会完整返回机器人。
 - 聊天 ID 不写入全局配置，只在 `lark_connect_bind_session` 里绑定。
 - 守护进程 1 小时没有飞书事件或本地调用后自动退出。
 
@@ -106,7 +107,8 @@ npx -y curiosea-lark-connect@latest daemon stop
 5. 传入 `chatId`、`agentKind`、`agentSessionId`、`workspace`。
 6. 如果目标聊天已经绑定到旧会话，只有在用户明确要求接管时才传 `replace: true`。
 7. 如果需要理解已有协作背景，调用 `lark_connect_get_chat_context` 读取最近消息；不传 `limit` 时默认最近 10 条。
-8. 绑定成功后必须立即调用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`，让当前会话马上进入监听。
+8. 如果需要 @ 人类同事或其他机器人，先调用 `lark_connect_get_chat_members` 获取候选成员和可识别机器人；机器人列表不是完整枚举，找不到时再从近期上下文里确认。
+9. 绑定成功后必须立即调用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`，让当前会话马上进入监听。
 
 绑定后，常用工具是：
 
@@ -117,6 +119,7 @@ npx -y curiosea-lark-connect@latest daemon stop
 | `lark_connect_wait_direct_chat_signal` | 等待用户给机器人单聊发送指定挑战文本，返回单聊 `chatId` 和建议绑定参数。 |
 | `lark_connect_bind_session` | 把一个飞书聊天绑定到当前 Codex thread 或 Claude Code session。 |
 | `lark_connect_get_chat_context` | 读取当前绑定聊天的近期消息，默认最近 10 条，用于理解协作上下文。 |
+| `lark_connect_get_chat_members` | 查询当前绑定聊天的人类成员，并返回当前应用和近期消息里可识别的机器人或应用发送者；不会完整返回机器人。 |
 | `lark_connect_poll_messages` | 立即领取当前绑定聊天的待处理消息。 |
 | `lark_connect_wait_messages` | 限时等待当前绑定聊天的待处理消息。 |
 | `lark_connect_ack_message` | 确认一条消息已经处理完成，并给原始飞书消息添加 `OK` reaction（反应）。 |
@@ -150,6 +153,8 @@ npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 
 
 如果要 @ 某个真实对象，优先从 `lark_connect_get_chat_context` 返回的 `sender` 或 `mentions` 字段里取标识，不要编造用户或机器人 ID。
 
+如果需要先查看候选对象，调用 `lark_connect_get_chat_members`。它会返回 `members` 和 `bots` 两类结果：`members` 来自飞书群成员接口，`bots` 只包含当前配置应用和近期聊天消息里出现过的应用发送者。由于飞书群成员接口不会完整返回机器人，如果目标机器人不在结果里，需要让它先在群里发言或从上下文消息里确认真实标识。
+
 ## 工程说明
 
 ### 目录结构
@@ -157,7 +162,7 @@ npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 
 ```text
 src/cli.js                  命令行入口
 src/config.js               本地配置读写和运行时配置解析
-src/lark/                   飞书长连接、消息、聊天上下文、reaction（反应）、资源下载和连通性检查
+src/lark/                   飞书长连接、消息、聊天上下文、群成员、reaction（反应）、资源下载和连通性检查
 src/daemon/                 本地守护进程、HTTP 接口和内存路由状态
 src/mcp/server.js           MCP 标准输入输出服务和工具定义
 plugins/lark-connect/       Codex 和 Claude Code 共用的插件载荷
@@ -184,9 +189,10 @@ flowchart LR
 1. `daemon start` 使用飞书 Node.js SDK（软件开发工具包）建立长连接。
 2. 守护进程接收已绑定聊天里的消息；群聊必须明确提及机器人，单聊不要求提及。
 3. 需要背景时，MCP 的 `lark_connect_get_chat_context` 会通过飞书历史消息接口读取当前绑定聊天的近期消息；这些消息不会进入待处理队列，也不需要 ack。
-4. 新消息进入内存队列后，MCP 的 `poll` 或 `wait` 工具把消息交给绑定会话。
-5. 智能体处理任务后，通过发送工具把文本、图片、视频或文件发回对应聊天，可以回复原消息，也可以 @ 人类同事或其他机器人。
-6. 智能体调用 `ack` 后，守护进程给原始飞书消息添加 `OK` reaction（反应），并把本地消息状态标为已确认。
+4. 需要 @ 协作者时，MCP 的 `lark_connect_get_chat_members` 会读取当前聊天的人类成员，并结合当前应用和近期消息识别部分机器人或应用发送者。
+5. 新消息进入内存队列后，MCP 的 `poll` 或 `wait` 工具把消息交给绑定会话。
+6. 智能体处理任务后，通过发送工具把文本、图片、视频或文件发回对应聊天，可以回复原消息，也可以 @ 人类同事或其他机器人。
+7. 智能体调用 `ack` 后，守护进程给原始飞书消息添加 `OK` reaction（反应），并把本地消息状态标为已确认。
 
 ### 配置和状态
 

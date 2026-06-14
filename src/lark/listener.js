@@ -6,11 +6,16 @@ export function requireListenerConfig(config) {
 }
 
 export function normalizeMessage(message) {
+  const senderType = String(
+    message.senderType ?? message.raw?.sender?.sender_type ?? "",
+  ).trim();
+
   return {
     messageId: message.messageId,
     chatId: message.chatId,
     chatType: message.chatType,
     senderId: message.senderId,
+    senderType: senderType || undefined,
     senderName: message.senderName,
     content: message.content,
     rawContentType: message.rawContentType,

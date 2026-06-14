@@ -88,6 +88,13 @@ export function createDaemonHttpClient(options = {}) {
       });
     },
 
+    getChatMembers(agentSessionId, input = {}) {
+      return request(`/sessions/${encodeURIComponent(agentSessionId)}/chat-members`, {
+        method: "POST",
+        body: input,
+      });
+    },
+
     ackMessage(messageId, input = {}) {
       return request(`/messages/${encodeURIComponent(messageId)}/ack`, {
         method: "POST",

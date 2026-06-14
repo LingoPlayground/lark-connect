@@ -54,14 +54,18 @@ describe("lark channel runner", () => {
       chatId: "oc_target",
       content: "Please tighten the title spacing",
       mentionedBot: true,
+      raw: {
+        sender: {
+          sender_type: "app",
+        },
+      },
       rootId: "om_root",
     });
 
     assert.equal(channel.connected, true);
-    assert.deepEqual(
-      runtime.pollMessages("thread_a").map((message) => message.larkMessageId),
-      ["om_1"],
-    );
+    const messages = runtime.pollMessages("thread_a");
+    assert.deepEqual(messages.map((message) => message.larkMessageId), ["om_1"]);
+    assert.equal(messages[0].payload.senderType, "app");
 
     await runner.stop();
     assert.equal(channel.unsubscribeCalled, true);

@@ -40,6 +40,7 @@ describe("mcp daemon tools", () => {
         "lark_connect_wait_direct_chat_signal",
         "lark_connect_bind_session",
         "lark_connect_get_chat_context",
+        "lark_connect_get_chat_members",
         "lark_connect_poll_messages",
         "lark_connect_wait_messages",
         "lark_connect_ack_message",
@@ -355,6 +356,30 @@ describe("mcp daemon tools", () => {
       required: ["agentSessionId"],
       additionalProperties: false,
     });
+    assert.deepEqual(toolByName(tools, "lark_connect_get_chat_members").inputSchema, {
+      type: "object",
+      properties: {
+        agentSessionId: {
+          type: "string",
+          description: "Codex thread id or Claude Code session id.",
+        },
+        pageSize: {
+          type: "number",
+          description: "Maximum number of human members to return. Defaults to 50.",
+        },
+        pageToken: {
+          type: "string",
+          description: "Optional pagination token from a prior member read.",
+        },
+        botHistoryLimit: {
+          type: "number",
+          description:
+            "Recent chat messages to scan for app/bot senders. Defaults to 20 because Feishu member APIs do not return bots.",
+        },
+      },
+      required: ["agentSessionId"],
+      additionalProperties: false,
+    });
     assert.deepEqual(toolByName(tools, "lark_connect_send_message").inputSchema, {
       type: "object",
       properties: {
@@ -438,6 +463,50 @@ describe("mcp daemon tools", () => {
         messages: [{ messageId: "om_latest", text: "最近的讨论" }],
         hasMore: false,
         pageToken: "",
+      },
+    });
+  });
+
+  it("forwards chat member reads to the local daemon client", async () => {
+    let observedAgentSessionId;
+    let observedArgs;
+    const response = await handleMcpMessage(
+      toolCall("lark_connect_get_chat_members", {
+        agentSessionId: "thread_a",
+        pageSize: 20,
+        pageToken: "members_page",
+        botHistoryLimit: 10,
+      }),
+      {
+        createDaemonHttpClientImpl: () => ({
+          getChatMembers: async (agentSessionId, args) => {
+            observedAgentSessionId = agentSessionId;
+            observedArgs = args;
+            return {
+              roster: {
+                chatId: "oc_target",
+                members: [{ memberId: "ou_human", memberType: "user" }],
+                bots: [{ appId: "cli_bot", memberType: "bot", source: "recent_message_sender" }],
+                botCoverage: "partial",
+              },
+            };
+          },
+        }),
+      },
+    );
+
+    assert.equal(observedAgentSessionId, "thread_a");
+    assert.deepEqual(observedArgs, {
+      pageSize: 20,
+      pageToken: "members_page",
+      botHistoryLimit: 10,
+    });
+    assert.deepEqual(parseToolJson(response), {
+      roster: {
+        chatId: "oc_target",
+        members: [{ memberId: "ou_human", memberType: "user" }],
+        bots: [{ appId: "cli_bot", memberType: "bot", source: "recent_message_sender" }],
+        botCoverage: "partial",
       },
     });
   });
