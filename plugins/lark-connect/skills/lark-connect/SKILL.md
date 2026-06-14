@@ -1,6 +1,6 @@
 ---
 name: lark-connect
-description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-connect、搜索机器人可见群聊、用挑战码发现机器人单聊、把当前 Codex thread 或 Claude Code session 绑定到聊天、发送截图、录屏、文件或文本、等待或轮询消息、确认已处理消息、下载收到的资源，并持续根据聊天消息处理任务时使用。
+description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-connect、搜索机器人可见群聊、用挑战码发现机器人单聊、把当前 Codex thread 或 Claude Code session 绑定到聊天、读取聊天上下文、查询群成员和群内机器人、@ 人类同事或其他机器人、发送截图、录屏、文件或文本、等待或轮询消息、确认已处理消息、下载收到的资源，并持续根据聊天消息处理任务时使用。
 ---
 
 # 飞书连接
@@ -44,9 +44,9 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 先按场景选择工具，不要从工具清单倒推行动：
 
-- 进入已有聊天或刚完成绑定：调用 `lark_connect_get_chat_context`，默认读取最近 10 条消息，先建立协作背景，再进入 1 分钟短等待。
+- 进入已有聊天或刚完成绑定：调用 `lark_connect_get_chat_context`，默认读取最近 10 条消息，返回顺序是新到旧；先建立协作背景，再进入 1 分钟短等待。
 - 收到一条孤立的 `wait` 或 `poll` 消息：如果缺少上下文、引用关系或前因后果，先调用 `lark_connect_get_chat_context`，再决定怎么处理。
-- 定位要 @ 的对象：调用 `lark_connect_get_chat_members`。需要人类同事时看 `members`；需要其他机器人时看 `bots`，并使用机器人结果里的 `openId`。
+- 定位要 @ 的对象：调用 `lark_connect_get_chat_members`。需要人类同事时看 `members`；当 `memberIdType` 是 `open_id` 时，把 `memberId` 作为 `mentions[].openId`。需要其他机器人时看 `bots`，并使用机器人结果里的 `openId`。
 - 机器人到机器人协作：先用 `lark_connect_get_chat_members` 找目标机器人，再用 `lark_connect_send_message` 传 `mentions`。如果是在响应某条消息，同时传入原消息的 `replyToMessageId`。
 - 回复某条具体消息：优先用 `replyToMessageId`，让飞书里能看到回复关系；只有话题上下文明确需要时才使用 `replyInThread`。
 - 发送产物给人验看：截图或静态界面用 `lark_connect_send_image`，录屏用 `lark_connect_send_video`，日志或压缩包用 `lark_connect_send_file`，简短说明用 `lark_connect_send_message`。
@@ -56,7 +56,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 ## 上下文
 
-开始处理协作任务前，先调用 `lark_connect_get_chat_context` 读取当前绑定聊天的近期消息；不传 `limit` 时默认最近 10 条。这个工具用于理解人类协作背景、消息引用关系、谁在讨论、以及是否需要回复或 @ 人类同事和其他机器人。
+开始处理协作任务前，先调用 `lark_connect_get_chat_context` 读取当前绑定聊天的近期消息；不传 `limit` 时默认最近 10 条，返回顺序是新到旧。这个工具用于理解人类协作背景、消息引用关系、谁在讨论、以及是否需要回复或 @ 人类同事和其他机器人。
 
 最佳实践：
 
@@ -64,9 +64,11 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 - `wait` 或 `poll` 返回的单条消息缺少背景时，先读上下文再处理，避免只看孤立消息就行动。
 - `wait` 或 `poll` 返回的消息如果 `senderType` 是 `bot` 或 `app`，把它视为机器人或应用发送者；回复时可以结合 `replyToMessageId` 保持上下文。
 - 不要对上下文里的历史消息调用 `lark_connect_ack_message`；只有 `wait` 或 `poll` 投递给当前会话的消息才需要 ack。
-- 如果需要 @ 人类同事或其他机器人，优先从上下文的 `sender` 或 `mentions` 字段里取得真实 `openId`；不要编造用户或机器人标识。
+- 如果需要 @ 人类同事或其他机器人，可以从上下文的 `sender` 或 `mentions` 字段取得标识；只有当 `sender.idType` 或 `mentions[].idType` 是 `open_id` 时，才能把对应 `id` 作为 `mentions[].openId`。不要编造用户或机器人标识。
 
 需要查看聊天参与者时，调用 `lark_connect_get_chat_members`。它返回 `members` 和 `bots`：`members` 是群里的人类成员，`bots` 来自飞书 `/open-apis/im/v1/chats/{chat_id}/members/bots` 接口。机器人结果里的 `openId` 是机器人的 open_id，可以作为发送消息时的 @ 目标。
+
+如果 `lark_connect_get_chat_members` 返回 `hasMore: true`，并且当前页没有找到目标对象，继续用返回的 `pageToken` 调用下一页，直到找到目标或 `hasMore` 为 false。不要只查第一页就判断成员不存在。
 
 ## 发送
 
@@ -111,6 +113,8 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 - 如果单聊挑战等待超时，提示用户确认机器人单聊和挑战文本，再用新的挑战文本重试。
 - 如果轮询或等待返回 `SESSION_NOT_BOUND`，先绑定会话再重试。
 - 如果返回 `DAEMON_NOT_RUNNING`，先启动守护进程再重试。
+- 如果 `lark_connect_get_chat_context` 返回 `LARK_CHAT_CONTEXT_FAILED`，提示用户确认应用具备读取群组历史消息权限、机器人已在群里，并保留绑定后继续用 `wait` 等待新消息。
+- 如果 `lark_connect_get_chat_members` 返回 `LARK_CHAT_MEMBERS_FAILED`，提示用户确认应用具备读取群成员和群内机器人权限、机器人已在群里；需要 @ 对象时让用户在群里提及或提供可用 open_id。
 - 如果发送或下载失败，向聊天或当前对话说明失败原因，不要静默吞掉。
 
 ## 确认

@@ -83,7 +83,7 @@ const TOOLS = [
   {
     name: "lark_connect_get_chat_context",
     description:
-      "Read recent messages from the Feishu chat bound to one Codex or Claude Code session. Defaults to the latest 10 messages.",
+      "Read recent messages from the Feishu chat bound to one Codex or Claude Code session. Defaults to the latest 10 messages, newest first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -158,7 +158,7 @@ const TOOLS = [
   {
     name: "lark_connect_send_message",
     description:
-      "Send a text message to the Feishu chat bound to one Codex or Claude Code session.",
+      "Send text to the bound Feishu chat. Supports replying to a message, mentioning humans or bots, and mention-only messages.",
     inputSchema: {
       type: "object",
       properties: {

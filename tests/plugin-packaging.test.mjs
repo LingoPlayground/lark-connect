@@ -28,20 +28,29 @@ function assertClaudeNpxMcpServer(server) {
 
 describe("dual runtime plugin packaging", () => {
   it("defines Codex and Claude plugin manifests for the same plugin", () => {
+    const packageJson = readJson("package.json");
     const codexManifest = readJson("plugins/lark-connect/.codex-plugin/plugin.json");
     assert.equal(codexManifest.name, "lark-connect");
-    assert.equal(codexManifest.version, "0.1.5");
+    assert.equal(codexManifest.version, packageJson.version);
     assert.equal(codexManifest.skills, "./skills/");
     assert.equal(codexManifest.mcpServers, "./codex.mcp.json");
     assert.match(codexManifest.description, /飞书/);
     assert.match(codexManifest.description, /搜索群聊/);
     assert.match(codexManifest.description, /发现单聊/);
+    assert.match(codexManifest.description, /聊天上下文/);
+    assert.match(codexManifest.description, /成员/);
+    assert.match(codexManifest.description, /@/);
     assert.match(codexManifest.interface.shortDescription, /搜索飞书群聊/);
     assert.match(codexManifest.interface.longDescription, /lark_connect_search_chats|搜索机器人可见/);
+    assert.match(codexManifest.interface.longDescription, /lark_connect_get_chat_context/);
+    assert.match(codexManifest.interface.longDescription, /lark_connect_get_chat_members/);
+    assert.match(codexManifest.interface.longDescription, /@ 人类同事或其他机器人/);
     assert.match(codexManifest.interface.longDescription, /lark_connect_wait_direct_chat_signal|挑战码/);
     assert.match(codexManifest.interface.longDescription, /已绑定单聊不要求提及/);
     assert.match(codexManifest.interface.defaultPrompt.join("\n"), /帮我配置/);
     assert.match(codexManifest.interface.defaultPrompt.join("\n"), /搜索目标飞书群/);
+    assert.match(codexManifest.interface.defaultPrompt.join("\n"), /读取群聊上下文/);
+    assert.match(codexManifest.interface.defaultPrompt.join("\n"), /@/);
 
     const claudeManifest = readJson("plugins/lark-connect/.claude-plugin/plugin.json");
     assert.equal(claudeManifest.name, "lark-connect");
@@ -50,12 +59,15 @@ describe("dual runtime plugin packaging", () => {
     assert.match(claudeManifest.description, /搜索群聊/);
     assert.match(claudeManifest.description, /发现单聊/);
     assert.match(claudeManifest.description, /聊天消息/);
+    assert.match(claudeManifest.description, /聊天上下文/);
+    assert.match(claudeManifest.description, /@/);
   });
 
   it("registers the plugin in Codex and Claude marketplaces", () => {
+    const packageJson = readJson("package.json");
     const codexMarketplace = readJson(".agents/plugins/marketplace.json");
     const codexEntry = codexMarketplace.plugins.find((entry) => entry.name === "lark-connect");
-    assert.equal(codexEntry.version, "0.1.5");
+    assert.equal(codexEntry.version, packageJson.version);
     assert.equal(codexEntry.source.path, "./plugins/lark-connect");
     assert.equal(codexEntry.policy.installation, "AVAILABLE");
     assert.equal(codexEntry.policy.authentication, "ON_INSTALL");
@@ -63,11 +75,15 @@ describe("dual runtime plugin packaging", () => {
     const claudeMarketplace = readJson(".claude-plugin/marketplace.json");
     assert.match(claudeMarketplace.description, /飞书/);
     assert.match(claudeMarketplace.description, /搜索/);
+    assert.match(claudeMarketplace.description, /上下文/);
     const claudeEntry = claudeMarketplace.plugins.find((entry) => entry.name === "lark-connect");
-    assert.equal(claudeEntry.version, "0.1.5");
+    assert.equal(claudeEntry.version, packageJson.version);
     assert.match(claudeEntry.description, /飞书/);
     assert.match(claudeEntry.description, /搜索群聊/);
     assert.match(claudeEntry.description, /发现单聊/);
+    assert.match(claudeEntry.description, /聊天上下文/);
+    assert.match(claudeEntry.description, /成员/);
+    assert.match(claudeEntry.description, /@/);
     assert.equal(claudeEntry.source, "./plugins/lark-connect");
     assert.equal(claudeEntry.category, "productivity");
   });
@@ -118,6 +134,9 @@ describe("dual runtime plugin packaging", () => {
     );
     assert.match(responderSkill, /^name: lark-connect$/m);
     assert.match(responderOpenai, /display_name: "lark-connect"/);
+    assert.match(responderOpenai, /上下文/);
+    assert.match(responderOpenai, /群成员/);
+    assert.match(responderOpenai, /@/);
     assert.match(responderSkill, /^# 飞书连接$/m);
     assert.doesNotMatch(responderSkill, /验收/);
     assert.match(responderSkill, /lark_connect_search_chats/);
@@ -132,6 +151,11 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /senderType.*bot/);
     assert.match(responderSkill, /replyToMessageId/);
     assert.match(responderSkill, /历史消息不需要确认/);
+    assert.match(responderSkill, /idType.*open_id/);
+    assert.match(responderSkill, /memberIdType.*open_id/);
+    assert.match(responderSkill, /hasMore.*pageToken/);
+    assert.match(responderSkill, /LARK_CHAT_CONTEXT_FAILED/);
+    assert.match(responderSkill, /LARK_CHAT_MEMBERS_FAILED/);
     assert.match(responderSkill, /开始处理协作任务前/);
     assert.match(responderSkill, /默认最近 10 条/);
     assert.match(responderSkill, /挑战文本/);
@@ -165,6 +189,8 @@ describe("dual runtime plugin packaging", () => {
     assert.match(readme, /lark_connect_get_chat_context/);
     assert.match(readme, /lark_connect_get_chat_members/);
     assert.match(readme, /members\/bots/);
+    assert.match(readme, /idType.*open_id/);
+    assert.match(readme, /memberIdType.*open_id/);
     assert.match(readme, /绑定成功后必须立即调用 `lark_connect_wait_messages`/);
     assert.match(readme, /不要把超时当作监听结束/);
     assert.match(readme, /继续调用 `lark_connect_wait_messages`/);

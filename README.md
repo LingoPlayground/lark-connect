@@ -25,7 +25,7 @@
 
 - 本机有 Node.js 22 或更新版本。
 - 用户已经有一个飞书开放平台应用，并且机器人已经加入目标群，或用户可以打开机器人单聊发送确认挑战码。
-- 应用已经开通接收消息事件和后续需要的飞书权限。接收消息至少需要消息事件订阅；确认消息会使用 reaction（反应）接口，通常还需要 `im:message` 和 `im:message.reactions:write_only`；读取群聊上下文还需要应用具备获取群组历史消息的权限，并且机器人已经在目标群里。
+- 应用已经开通接收消息事件和后续需要的飞书权限。接收消息至少需要消息事件订阅；确认消息会使用 reaction（反应）接口，通常还需要 `im:message` 和 `im:message.reactions:write_only`；读取群聊上下文还需要应用具备获取群组历史消息的权限；查询人类成员和群内机器人还需要应用具备读取群成员与群内机器人列表的权限，并且机器人已经在目标群里。
 - 目标运行时已经安装：Codex、Claude Code，或两者都有。
 
 ### 安装插件
@@ -118,7 +118,7 @@ npx -y curiosea-lark-connect@latest daemon stop
 | `lark_connect_search_chats` | 搜索机器人可见的飞书群聊，返回候选 `chatId`。 |
 | `lark_connect_wait_direct_chat_signal` | 等待用户给机器人单聊发送指定挑战文本，返回单聊 `chatId` 和建议绑定参数。 |
 | `lark_connect_bind_session` | 把一个飞书聊天绑定到当前 Codex thread 或 Claude Code session。 |
-| `lark_connect_get_chat_context` | 读取当前绑定聊天的近期消息，默认最近 10 条，用于理解协作上下文。 |
+| `lark_connect_get_chat_context` | 读取当前绑定聊天的近期消息，默认最近 10 条，按新到旧返回，用于理解协作上下文。 |
 | `lark_connect_get_chat_members` | 查询当前绑定聊天的人类成员，并通过 `members/bots` 返回群内机器人。 |
 | `lark_connect_poll_messages` | 立即领取当前绑定聊天的待处理消息。 |
 | `lark_connect_wait_messages` | 限时等待当前绑定聊天的待处理消息。 |
@@ -151,9 +151,9 @@ npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 
 - `replyInThread`：在飞书话题里回复。
 - `mentions`：@ 人类同事或其他机器人。每项至少传 `openId`，可选 `name` 和 `isBot`。只传 `mentions` 不传 `text` 时，会发送一条只有 @ 的提醒消息。
 
-如果要 @ 某个真实对象，优先从 `lark_connect_get_chat_context` 返回的 `sender` 或 `mentions` 字段里取标识，不要编造用户或机器人 ID。
+如果要 @ 某个真实对象，可以从 `lark_connect_get_chat_context` 返回的 `sender` 或 `mentions` 字段里取标识；只有当 `sender.idType` 或 `mentions[].idType` 是 `open_id` 时，才能把对应 `id` 作为 `mentions[].openId`。不要编造用户或机器人 ID。
 
-如果需要先查看候选对象，调用 `lark_connect_get_chat_members`。它会返回 `members` 和 `bots` 两类结果：`members` 来自飞书群成员接口，`bots` 来自 `/open-apis/im/v1/chats/{chat_id}/members/bots`。机器人结果里的 `openId` 是机器人的 open_id，可以作为发送消息时的 @ 目标。
+如果需要先查看候选对象，调用 `lark_connect_get_chat_members`。它会返回 `members` 和 `bots` 两类结果：`members` 来自飞书群成员接口；当 `memberIdType` 是 `open_id` 时，可以把 `memberId` 作为 `mentions[].openId`。`bots` 来自 `/open-apis/im/v1/chats/{chat_id}/members/bots`。机器人结果里的 `openId` 是机器人的 open_id，可以作为发送消息时的 @ 目标。
 
 ## 工程说明
 
