@@ -217,12 +217,13 @@ npm install
 
 ```bash
 npm run quality
+npm run lint
 npm test
 npm run build
 npm run pack:check
 ```
 
-`npm run quality` 是本仓库的本地质量门禁入口，和拉取请求里的 `Node Tool Gates` 检查保持一致。
+`npm run quality` 是本仓库的本地质量门禁入口，包含 build、lint、test 和 pack 检查，和拉取请求里的 `Node Tool Gates` 检查保持一致。
 
 本地源码调试命令：
 

@@ -20,11 +20,13 @@ describe("package quality gate contract", () => {
     assert.match(pkg.scripts.build, /node --check/);
     assert.equal(pkg.scripts.test, "node --test");
     assert.equal(pkg.scripts.typecheck, "npm run build");
+    assert.equal(pkg.scripts.lint, "eslint src tests eslint.config.js");
     assert.equal(pkg.scripts["pack:check"], "npm pack --dry-run --json");
     assert.equal(
       pkg.scripts.quality,
-      "npm run build && npm test && npm run pack:check",
+      "npm run build && npm run lint && npm test && npm run pack:check",
     );
+    assert.equal(existsSync("eslint.config.js"), true);
   });
 
   it("keeps npm package metadata aligned with the runtime support policy", () => {

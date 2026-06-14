@@ -15,8 +15,9 @@
     "build": "find src -name '*.js' -print0 | xargs -0 -n1 node --check",
     "test": "node --test",
     "typecheck": "npm run build",
+    "lint": "eslint src tests eslint.config.js",
     "pack:check": "npm pack --dry-run --json",
-    "quality": "npm run build && npm test && npm run pack:check"
+    "quality": "npm run build && npm run lint && npm test && npm run pack:check"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.66.1"
@@ -30,5 +31,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LingoPlayground/lark-connect.git"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.5.0",
+    "globals": "^17.6.0"
   }
 }
