@@ -442,6 +442,10 @@ describe("daemon http server", () => {
       assert.equal(polled.diagnostics.queueBefore.pendingCount, 1);
       assert.equal(polled.diagnostics.queueAfter.deliveredCount, 1);
       assert.deepEqual(polled.diagnostics.deliveredMessageIds, ["om_poll"]);
+      assert.match(polled.nextSteps.join("\n"), /replyToMessageId/);
+      assert.match(polled.nextSteps.join("\n"), /om_poll/);
+      assert.match(polled.nextSteps.join("\n"), /通常提醒原消息发送者/);
+      assert.match(polled.nextSteps.join("\n"), /lark_connect_ack_message/);
 
       await server.client.ackMessage("om_poll", { agentSessionId: "thread_a" });
       const statusAfterAck = await server.client.status();
@@ -465,6 +469,7 @@ describe("daemon http server", () => {
         emptyWait.nextSteps.join("\n"),
         /npx -y curiosea-lark-connect@latest wait --agent-session-id thread_a --timeout-ms 300000/,
       );
+      assert.match(emptyWait.nextSteps.join("\n"), /这次超时/);
       assert.doesNotMatch(emptyWait.nextSteps.join("\n"), /<绑定时使用的 agentSessionId>/);
       assert.match(emptyWait.nextSteps.join("\n"), /唤醒后先调用 lark_connect_poll_messages/);
       assert.doesNotMatch(emptyWait.nextSteps.join("\n"), /继续启动下一轮 background shell/);
@@ -483,7 +488,10 @@ describe("daemon http server", () => {
       assert.equal(readyWait.diagnostics.result, "messages");
       assert.equal(readyWait.diagnostics.queueBefore.pendingCount, 1);
       assert.deepEqual(readyWait.diagnostics.deliveredMessageIds, ["om_wait_ready"]);
-      assert.equal(readyWait.nextSteps, undefined);
+      assert.match(readyWait.nextSteps.join("\n"), /replyToMessageId/);
+      assert.match(readyWait.nextSteps.join("\n"), /om_wait_ready/);
+      assert.match(readyWait.nextSteps.join("\n"), /通常提醒原消息发送者/);
+      assert.match(readyWait.nextSteps.join("\n"), /lark_connect_ack_message/);
     } finally {
       await server.close();
     }
@@ -499,6 +507,13 @@ describe("daemon http server", () => {
       assert.equal(polled.diagnostics.clientKind, "unknown");
       assert.equal(polled.diagnostics.deliverySource, "unknown_poll");
 
+      const emptyPoll = await server.client.pollMessages("thread_a");
+      assert.deepEqual(emptyPoll.messages, []);
+      assert.equal(emptyPoll.diagnostics.result, "empty");
+      assert.match(emptyPoll.nextSteps.join("\n"), /即时轮询为空/);
+      assert.match(emptyPoll.nextSteps.join("\n"), /lark_connect_wait_messages/);
+      assert.doesNotMatch(emptyPoll.nextSteps.join("\n"), /这次超时/);
+
       const response = await fetch(
         `http://${server.address.host}:${server.address.port}/sessions/thread_a/messages/wait?timeout_ms=0&client_kind=browser`,
       );
@@ -506,6 +521,25 @@ describe("daemon http server", () => {
       assert.equal(response.status, 200);
       assert.equal(waited.diagnostics.clientKind, "unknown");
       assert.equal(waited.diagnostics.deliverySource, "unknown_wait");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("includes every delivered message id in reply guidance for batches", async () => {
+    const server = await createTestServer();
+    try {
+      await server.client.bindSession(binding());
+      server.runtime.receiveLarkMessage(larkMessage({ messageId: "om_batch_one" }));
+      server.runtime.receiveLarkMessage(larkMessage({ messageId: "om_batch_two" }));
+
+      const polled = await server.client.pollMessages("thread_a");
+      assert.deepEqual(
+        polled.messages.map((message) => message.larkMessageId),
+        ["om_batch_one", "om_batch_two"],
+      );
+      assert.match(polled.nextSteps.join("\n"), /om_batch_one, om_batch_two/);
+      assert.match(polled.nextSteps.join("\n"), /replyToMessageId/);
     } finally {
       await server.close();
     }

@@ -204,10 +204,40 @@ function waitTimeoutNextSteps(agentSessionId) {
   ];
 }
 
-function waitMessagesBody(agentSessionId, messages, diagnostics) {
+function pollEmptyNextSteps(agentSessionId) {
+  return [
+    `当前没有待处理消息。这只是一次 lark_connect_poll_messages 即时轮询为空，不代表监听结束；如果会话仍活跃，继续调用 lark_connect_wait_messages 做下一轮约 1 分钟短等待，agentSessionId 使用 ${agentSessionId}。`,
+    "只有当前会话可能无人值守时，才建立约 5 分钟心跳；心跳唤醒后可以先 poll，有消息就处理、回复、ack，再进入短等待。",
+  ];
+}
+
+function deliveredMessagesNextSteps(agentSessionId, messages) {
+  const messageIds = messages.map((message) => message.larkMessageId).filter(Boolean);
+  const missingMessageIdCount = messages.length - messageIds.length;
+  if (missingMessageIdCount > 0) {
+    return [
+      `有 ${missingMessageIdCount} 条已投递消息缺少 larkMessageId，不能安全构造 replyToMessageId；不要填占位值，先读取消息内容、上下文或日志确认原始飞书消息 ID。`,
+      `对包含 larkMessageId 的消息，回复时仍使用对应 larkMessageId 作为 replyToMessageId；本次可回复的 message id：${messageIds.join(", ") || "无"}。`,
+      `处理完成后，对每条已处理消息调用 lark_connect_ack_message。全部处理完成后，再调用 lark_connect_wait_messages 继续等待 1 分钟，agentSessionId 使用 ${agentSessionId}。`,
+    ];
+  }
+  const replyTargets = messageIds.join(", ");
+  return [
+    `处理这些已投递消息时，回复每条消息都要把对应原消息的 larkMessageId 作为 replyToMessageId；本次可回复的 message id：${replyTargets}。飞书回复接口会建立回复关系并通常提醒原消息发送者，不要为了同一个原发送者预先重复传 mentions。`,
+    "如果实际聊天里没有提醒到原发送者，或还需要提醒其他人或其他机器人，才在 mentions 里加入额外对象；发送文本、图片、视频或文件时都保持同一个 replyToMessageId 规则。",
+    `回复完成后，对每条已处理消息调用 lark_connect_ack_message。全部处理完成后，再调用 lark_connect_wait_messages 继续等待 1 分钟，agentSessionId 使用 ${agentSessionId}。`,
+  ];
+}
+
+function messagesBody(agentSessionId, messages, diagnostics, options = {}) {
   const body = { messages, diagnostics };
   if (messages.length === 0) {
-    body.nextSteps = waitTimeoutNextSteps(agentSessionId);
+    body.nextSteps =
+      options.emptyKind === "poll"
+        ? pollEmptyNextSteps(agentSessionId)
+        : waitTimeoutNextSteps(agentSessionId);
+  } else {
+    body.nextSteps = deliveredMessagesNextSteps(agentSessionId, messages);
   }
   return body;
 }
@@ -794,7 +824,7 @@ export function createDaemonHttpServer(options = {}) {
           sendJson(
             response,
             200,
-            waitMessagesBody(
+            messagesBody(
               messagesRoute.agentSessionId,
               messages,
               createMessageDiagnostics({
@@ -807,6 +837,7 @@ export function createDaemonHttpServer(options = {}) {
                 queueAfter,
                 messages,
               }),
+              { emptyKind: "wait" },
             ),
           );
           return;
@@ -814,18 +845,24 @@ export function createDaemonHttpServer(options = {}) {
 
         const messages = runtime.pollMessages(messagesRoute.agentSessionId, { deliverySource });
         const queueAfter = safeSessionDiagnostics(runtime, messagesRoute.agentSessionId);
-        sendJson(response, 200, {
-          messages,
-          diagnostics: createMessageDiagnostics({
-            operation,
-            clientKind,
-            deliverySource,
-            emptyResult: "empty",
-            queueBefore,
-            queueAfter,
+        sendJson(
+          response,
+          200,
+          messagesBody(
+            messagesRoute.agentSessionId,
             messages,
-          }),
-        });
+            createMessageDiagnostics({
+              operation,
+              clientKind,
+              deliverySource,
+              emptyResult: "empty",
+              queueBefore,
+              queueAfter,
+              messages,
+            }),
+            { emptyKind: "poll" },
+          ),
+        );
         return;
       }
 

@@ -48,7 +48,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 - 收到一条孤立的 `wait` 或 `poll` 消息：如果缺少上下文、引用关系或前因后果，先调用 `lark_connect_get_chat_context`，再决定怎么处理。
 - 定位要 @ 的对象：调用 `lark_connect_get_chat_members`。需要人类同事时看 `members`；当 `memberIdType` 是 `open_id` 时，把 `memberId` 作为 `mentions[].openId`。需要其他机器人时看 `bots`，并使用机器人结果里的 `openId`。
 - 机器人到机器人协作：先用 `lark_connect_get_chat_members` 找目标机器人，再用 `lark_connect_send_message` 传 `mentions`。如果是在响应某条消息，同时传入原消息的 `replyToMessageId`。
-- 回复某条具体消息：优先用 `replyToMessageId`，让飞书里能看到回复关系；只有话题上下文明确需要时才使用 `replyInThread`。
+- 回复某条具体消息：必须传入原消息的 `replyToMessageId`。飞书回复接口会建立回复关系并通常提醒原消息发送者，让飞书里既能关联上下文，也能尽量提醒到人；只有话题上下文明确需要时才使用 `replyInThread`。
 - 发送产物给人验看：截图或静态界面用 `lark_connect_send_image`，录屏用 `lark_connect_send_video`，日志或压缩包用 `lark_connect_send_file`，简短说明用 `lark_connect_send_message`。
 - 处理收到的图片或文件：从 `wait` 或 `poll` 返回的 `resources` 里取 `fileKey`，再调用 `lark_connect_download_resource`。
 - 判断发送方是不是机器人：优先看投递消息里的 `senderType`。如果 `senderType: "bot"` 或 `senderType: "app"`，按机器人或应用发送者处理；需要名字时再用 `lark_connect_get_chat_members` 的 `bots` 结果按 `openId` 交叉确认。
@@ -62,7 +62,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 
 - 刚绑定并进入一个已有聊天时，先读一次上下文，然后继续短等待。上下文读取不是监听，不能替代 `lark_connect_wait_messages` 或 `lark_connect_poll_messages`。
 - `wait` 或 `poll` 返回的单条消息缺少背景时，先读上下文再处理，避免只看孤立消息就行动。
-- `wait` 或 `poll` 返回的消息如果 `senderType` 是 `bot` 或 `app`，把它视为机器人或应用发送者；回复时可以结合 `replyToMessageId` 保持上下文。
+- `wait` 或 `poll` 返回的消息如果 `senderType` 是 `bot` 或 `app`，把它视为机器人或应用发送者；回复时必须传入 `replyToMessageId`，让飞书回复接口建立回复关系并保持上下文。
 - 不要对上下文里的历史消息调用 `lark_connect_ack_message`；只有 `wait` 或 `poll` 投递给当前会话的消息才需要 ack。
 - 如果需要 @ 人类同事或其他机器人，可以从上下文的 `sender` 或 `mentions` 字段取得标识；只有当 `sender.idType` 或 `mentions[].idType` 是 `open_id` 时，才能把对应 `id` 作为 `mentions[].openId`。不要编造用户或机器人标识。
 
@@ -79,7 +79,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 - `lark_connect_send_video`：发送录屏；需要提供本地封面图。
 - `lark_connect_send_file`：发送日志、归档和非媒体附件。
 
-回复具体消息时传入 `replyToMessageId`。只有飞书话题上下文重要时才使用 `replyInThread`。
+回复具体消息时必须传入 `replyToMessageId`。飞书回复接口会建立回复关系并通常提醒原消息发送者；不要为了同一个原发送者预先重复传 `mentions`，避免重复提醒。只有实际聊天里没有提醒到原发送者，或需要提醒其他人或其他机器人时，才在 `mentions` 里加入额外对象。只有飞书话题上下文重要时才使用 `replyInThread`。
 
 需要 @ 人类同事或其他机器人时，在 `lark_connect_send_message` 里传入 `mentions`，每项至少包含 `openId`，可选 `name` 和 `isBot`。如果只是想提醒某个对象，可以只传 `mentions` 不传 `text`。
 
@@ -98,7 +98,7 @@ description: 连接飞书或 Lark 群聊和单聊。当用户想配置 lark-conn
 1. 阅读消息和资源列表。
 2. 必要时用 `lark_connect_download_resource` 下载图片或文件。
 3. 执行用户要求的处理任务。
-4. 用发送工具回复处理结果。
+4. 用发送工具回复处理结果，并传入原消息的 `replyToMessageId`，确保飞书建立回复关系并尽量提醒原消息发送者。
 5. 调用 `lark_connect_ack_message` 确认这条消息。
 6. 再次用 `lark_connect_wait_messages` 等待 1 分钟。
 

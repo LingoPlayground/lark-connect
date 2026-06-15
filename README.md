@@ -145,6 +145,7 @@ npx -y curiosea-lark-connect@latest daemon stop
 7. 如果需要理解已有协作背景，调用 `lark_connect_get_chat_context` 读取最近消息；不传 `limit` 时默认最近 10 条。
 8. 如果需要 @ 人类同事或其他机器人，先调用 `lark_connect_get_chat_members` 获取候选成员和群内机器人；机器人返回值里的 `openId` 可直接作为 @ 目标。
 9. 绑定成功后必须立即调用 `lark_connect_wait_messages`，建议 `timeoutMs: 60000`，让当前会话马上进入监听。
+10. 回复收到的消息时必须传入原消息的 `replyToMessageId`，让飞书建立回复关系并尽量提醒原消息发送者。
 
 绑定后，常用工具是：
 
@@ -188,6 +189,8 @@ npx -y curiosea-lark-connect@latest wait --agent-session-id <绑定时使用的 
 - `replyToMessageId`：回复某条飞书原始消息。
 - `replyInThread`：在飞书话题里回复。
 - `mentions`：@ 人类同事或其他机器人。每项至少传 `openId`，可选 `name` 和 `isBot`。只传 `mentions` 不传 `text` 时，会发送一条只有 @ 的提醒消息。
+
+回复收到的消息时必须传入 `replyToMessageId`。飞书回复接口会建立回复关系并通常提醒原消息发送者；不要为了同一个原发送者预先重复传 `mentions`，避免重复提醒。只有实际聊天里没有提醒到原发送者，或需要提醒其他人或其他机器人时，才在 `mentions` 里加入额外对象。
 
 如果要 @ 某个真实对象，可以从 `lark_connect_get_chat_context` 返回的 `sender` 或 `mentions` 字段里取标识；只有当 `sender.idType` 或 `mentions[].idType` 是 `open_id` 时，才能把对应 `id` 作为 `mentions[].openId`。不要编造用户或机器人 ID。
 
