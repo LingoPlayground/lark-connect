@@ -139,6 +139,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderOpenai, /上下文/);
     assert.match(responderOpenai, /群成员/);
     assert.match(responderOpenai, /@/);
+    assert.match(responderOpenai, /replyToMessageId/);
     assert.match(responderSkill, /^# 飞书连接$/m);
     assert.doesNotMatch(responderSkill, /验收/);
     assert.match(responderSkill, /lark_connect_search_chats/);
@@ -152,6 +153,7 @@ describe("dual runtime plugin packaging", () => {
     assert.match(responderSkill, /机器人到机器人协作/);
     assert.match(responderSkill, /senderType.*bot/);
     assert.match(responderSkill, /replyToMessageId/);
+    assert.match(responderSkill, /回复.*默认 @/);
     assert.match(responderSkill, /历史消息不需要确认/);
     assert.match(responderSkill, /idType.*open_id/);
     assert.match(responderSkill, /memberIdType.*open_id/);

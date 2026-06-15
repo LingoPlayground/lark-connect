@@ -442,6 +442,10 @@ describe("daemon http server", () => {
       assert.equal(polled.diagnostics.queueBefore.pendingCount, 1);
       assert.equal(polled.diagnostics.queueAfter.deliveredCount, 1);
       assert.deepEqual(polled.diagnostics.deliveredMessageIds, ["om_poll"]);
+      assert.match(polled.nextSteps.join("\n"), /replyToMessageId/);
+      assert.match(polled.nextSteps.join("\n"), /om_poll/);
+      assert.match(polled.nextSteps.join("\n"), /默认 @ 原消息发送者/);
+      assert.match(polled.nextSteps.join("\n"), /lark_connect_ack_message/);
 
       await server.client.ackMessage("om_poll", { agentSessionId: "thread_a" });
       const statusAfterAck = await server.client.status();
@@ -483,7 +487,10 @@ describe("daemon http server", () => {
       assert.equal(readyWait.diagnostics.result, "messages");
       assert.equal(readyWait.diagnostics.queueBefore.pendingCount, 1);
       assert.deepEqual(readyWait.diagnostics.deliveredMessageIds, ["om_wait_ready"]);
-      assert.equal(readyWait.nextSteps, undefined);
+      assert.match(readyWait.nextSteps.join("\n"), /replyToMessageId/);
+      assert.match(readyWait.nextSteps.join("\n"), /om_wait_ready/);
+      assert.match(readyWait.nextSteps.join("\n"), /默认 @ 原消息发送者/);
+      assert.match(readyWait.nextSteps.join("\n"), /lark_connect_ack_message/);
     } finally {
       await server.close();
     }

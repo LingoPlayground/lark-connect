@@ -204,10 +204,22 @@ function waitTimeoutNextSteps(agentSessionId) {
   ];
 }
 
-function waitMessagesBody(agentSessionId, messages, diagnostics) {
+function deliveredMessagesNextSteps(agentSessionId, messages) {
+  const messageIds = messages.map((message) => message.larkMessageId).filter(Boolean);
+  const replyTargets = messageIds.length > 0 ? messageIds.join(", ") : "返回消息的 larkMessageId";
+  return [
+    `处理这些已投递消息时，回复每条消息都要把对应原消息的 larkMessageId 作为 replyToMessageId；本次可回复的 message id：${replyTargets}。飞书回复接口会默认 @ 原消息发送者，不要为了同一个原发送者再额外传 mentions，避免重复 @。`,
+    "如果还需要提醒其他人或其他机器人，才在 mentions 里加入额外对象；发送文本、图片、视频或文件时都保持同一个 replyToMessageId 规则。",
+    `回复完成后，对每条已处理消息调用 lark_connect_ack_message。全部处理完成后，再调用 lark_connect_wait_messages 继续等待 1 分钟，agentSessionId 使用 ${agentSessionId}。`,
+  ];
+}
+
+function messagesBody(agentSessionId, messages, diagnostics) {
   const body = { messages, diagnostics };
   if (messages.length === 0) {
     body.nextSteps = waitTimeoutNextSteps(agentSessionId);
+  } else {
+    body.nextSteps = deliveredMessagesNextSteps(agentSessionId, messages);
   }
   return body;
 }
@@ -794,7 +806,7 @@ export function createDaemonHttpServer(options = {}) {
           sendJson(
             response,
             200,
-            waitMessagesBody(
+            messagesBody(
               messagesRoute.agentSessionId,
               messages,
               createMessageDiagnostics({
@@ -814,18 +826,23 @@ export function createDaemonHttpServer(options = {}) {
 
         const messages = runtime.pollMessages(messagesRoute.agentSessionId, { deliverySource });
         const queueAfter = safeSessionDiagnostics(runtime, messagesRoute.agentSessionId);
-        sendJson(response, 200, {
-          messages,
-          diagnostics: createMessageDiagnostics({
-            operation,
-            clientKind,
-            deliverySource,
-            emptyResult: "empty",
-            queueBefore,
-            queueAfter,
+        sendJson(
+          response,
+          200,
+          messagesBody(
+            messagesRoute.agentSessionId,
             messages,
-          }),
-        });
+            createMessageDiagnostics({
+              operation,
+              clientKind,
+              deliverySource,
+              emptyResult: "empty",
+              queueBefore,
+              queueAfter,
+              messages,
+            }),
+          ),
+        );
         return;
       }
 
