@@ -505,7 +505,7 @@ describe("mcp daemon tools", () => {
     });
     assert.equal(
       toolByName(tools, "lark_connect_send_message").description,
-      "Send text to the bound Feishu chat. Supports replying to a message, mentioning humans or bots, and mention-only messages.",
+      "Send text to the bound Feishu chat. When responding to a delivered message, pass that message's larkMessageId as replyToMessageId. Supports mentioning additional humans or bots and mention-only messages.",
     );
     assert.equal(
       toolByName(tools, "lark_connect_get_chat_members").description,
@@ -565,7 +565,11 @@ describe("mcp daemon tools", () => {
             additionalProperties: false,
           },
         },
-        replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
+        replyToMessageId: {
+          type: "string",
+          description:
+            "Feishu message id to reply to. Required when responding to a delivered wait or poll message; use that message's larkMessageId.",
+        },
         replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
       },
       required: ["agentSessionId"],

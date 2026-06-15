@@ -158,7 +158,7 @@ const TOOLS = [
   {
     name: "lark_connect_send_message",
     description:
-      "Send text to the bound Feishu chat. Supports replying to a message, mentioning humans or bots, and mention-only messages.",
+      "Send text to the bound Feishu chat. When responding to a delivered message, pass that message's larkMessageId as replyToMessageId. Supports mentioning additional humans or bots and mention-only messages.",
     inputSchema: {
       type: "object",
       properties: {
@@ -188,7 +188,11 @@ const TOOLS = [
             additionalProperties: false,
           },
         },
-        replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
+        replyToMessageId: {
+          type: "string",
+          description:
+            "Feishu message id to reply to. Required when responding to a delivered wait or poll message; use that message's larkMessageId.",
+        },
         replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
       },
       required: ["agentSessionId"],
@@ -205,7 +209,11 @@ const TOOLS = [
         agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
         filePath: { type: "string", description: "Local path to the file to send." },
         fileName: { type: "string", description: "Optional display name in Feishu." },
-        replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
+        replyToMessageId: {
+          type: "string",
+          description:
+            "Feishu message id to reply to. Required when sending this file as a response to a delivered wait or poll message; use that message's larkMessageId.",
+        },
         replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
       },
       required: ["agentSessionId", "filePath"],
@@ -221,7 +229,11 @@ const TOOLS = [
       properties: {
         agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
         imagePath: { type: "string", description: "Local image path to send." },
-        replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
+        replyToMessageId: {
+          type: "string",
+          description:
+            "Feishu message id to reply to. Required when sending this image as a response to a delivered wait or poll message; use that message's larkMessageId.",
+        },
         replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
       },
       required: ["agentSessionId", "imagePath"],
@@ -238,7 +250,11 @@ const TOOLS = [
         agentSessionId: { type: "string", description: "Codex thread id or Claude Code session id." },
         videoPath: { type: "string", description: "Local video path to send." },
         coverImagePath: { type: "string", description: "Local image path used as the Feishu video cover." },
-        replyToMessageId: { type: "string", description: "Optional Feishu message id to reply to." },
+        replyToMessageId: {
+          type: "string",
+          description:
+            "Feishu message id to reply to. Required when sending this video as a response to a delivered wait or poll message; use that message's larkMessageId.",
+        },
         replyInThread: { type: "boolean", description: "Whether to reply inside a Feishu thread." },
       },
       required: ["agentSessionId", "videoPath", "coverImagePath"],
