@@ -1,19 +1,19 @@
 # lark-connect
 
-lark-connect 是 Codex 和 Claude Code 共用的飞书协作技能。智能体使用官方 `lark-cli` 的配置档案，以机器人或用户身份进入一个飞书聊天，读取上下文、处理消息、回复原消息，并在会话无人值守时继续补查。其他飞书操作也直接交给 `lark-cli`，本仓库不提供另一套飞书命令行工具或服务。
+lark-connect 是 Codex 和 Claude Code 共用的飞书聊天协作插件。其中的 `lark-chat-session` 技能只在需要把当前智能体会话绑定到指定聊天、持续检查并按需回复消息时使用。普通飞书操作直接使用官方 `lark-cli`，本仓库不提供另一套飞书命令行工具或服务。
 
 ## 典型使用方式
 
 在本地智能体会话中说：
 
 ```text
-/lark-connect 帮我准备飞书配置档案，验证机器人身份，连接【目标群】并持续处理明确提及它的消息。
+/lark-chat-session 帮我准备飞书配置档案，验证机器人身份，连接【目标群】并持续处理明确提及它的消息。
 ```
 
 也可以选择用户身份：
 
 ```text
-/lark-connect 以我的飞书用户身份连接【目标聊天】，检查所有新消息，按需回复。
+/lark-chat-session 以我的飞书用户身份连接【目标聊天】，检查所有新消息，按需回复。
 ```
 
 机器人群聊只把明确提及该机器人的消息交给会话；机器人单聊无需提及。用户身份会检查选定聊天的全部新消息，由智能体判断是否需要回应。回复始终关联原消息，完成后在原消息上添加 `OK` 反应。智能体还可按需读取上下文、发送截图、录屏或文件，并与同事或其他智能体协作。
@@ -69,8 +69,8 @@ lark-cli --profile <配置档案名> whoami --as user
 ## 工程说明
 
 ```text
-plugins/lark-connect/skills/lark-connect/ Codex 与 Claude Code 共用技能
-plugins/lark-connect/skills/lark-connect/scripts/session.mjs
+plugins/lark-connect/skills/lark-chat-session/ Codex 与 Claude Code 共用技能
+plugins/lark-connect/skills/lark-chat-session/scripts/session.mjs
                                         单连接与扫描检查点
 plugins/lark-connect/.codex-plugin/       Codex 插件清单
 plugins/lark-connect/.claude-plugin/      Claude Code 插件清单

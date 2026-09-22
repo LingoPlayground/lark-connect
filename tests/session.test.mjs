@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const script = new URL("../plugins/lark-connect/skills/lark-connect/scripts/session.mjs", import.meta.url);
+const script = new URL("../plugins/lark-connect/skills/lark-chat-session/scripts/session.mjs", import.meta.url);
 
 function withState(run) {
   const stateHome = mkdtempSync(join(tmpdir(), "lark-connect-session-"));

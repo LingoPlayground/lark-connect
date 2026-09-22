@@ -27,9 +27,14 @@ describe("skill-only plugin packaging", () => {
   });
 
   it("ships the session script and teaches direct profile-bound lark-cli calls", () => {
-    const skill = readFileSync("plugins/lark-connect/skills/lark-connect/SKILL.md", "utf8");
+    const skill = readFileSync("plugins/lark-connect/skills/lark-chat-session/SKILL.md", "utf8");
     assert.equal(existsSync("plugins/lark-connect/skills/lark-connect-setup"), false);
-    assert.equal(existsSync("plugins/lark-connect/skills/lark-connect/scripts/session.mjs"), true);
+    assert.equal(existsSync("plugins/lark-connect/skills/lark-connect"), false);
+    assert.equal(existsSync("plugins/lark-connect/skills/lark-chat-session/scripts/session.mjs"), true);
+    assert.match(skill, /^name: lark-chat-session$/m);
+    assert.match(skill, /^description: 当用户明确要求把当前 .*会话绑定到指定飞书聊天/m);
+    assert.match(skill, /普通飞书操作直接使用 lark-cli/);
+    assert.match(readFileSync("plugins/lark-connect/skills/lark-chat-session/agents/openai.yaml", "utf8"), /display_name: "lark-chat-session"/);
     assert.match(skill, /session\.mjs start/);
     assert.match(skill, /session\.mjs checkpoint/);
     assert.match(skill, /--profile/);

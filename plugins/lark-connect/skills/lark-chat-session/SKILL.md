@@ -1,9 +1,9 @@
 ---
-name: lark-connect
-description: 准备 lark-cli 配置档案和机器人或用户身份，并把当前 Codex 或 Claude Code 会话连接到飞书群聊或单聊，读取上下文、处理消息并持续响应；其他飞书操作按需直接使用 lark-cli。
+name: lark-chat-session
+description: 当用户明确要求把当前 Codex 任务或 Claude Code 会话绑定到指定飞书聊天、持续响应该聊天消息，或查看、停止已有绑定时使用。普通飞书操作直接使用 lark-cli。
 ---
 
-# 飞书连接
+# 飞书聊天会话连接
 
 本技能只协调一个飞书聊天与当前智能体会话。飞书读写直接使用 `lark-cli`；本技能目录下的 `scripts/session.mjs` 只保存本机绑定和扫描检查点。不要寻找旧版模型上下文协议工具、守护进程或 `curiosea-lark-connect` 命令。
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "lark-chat-session"
+  short_description: "把当前会话绑定到飞书聊天并持续响应消息"
+  default_prompt: "选择飞书配置档案和身份，把当前会话绑定到指定聊天，并持续检查新消息、按需回复。"

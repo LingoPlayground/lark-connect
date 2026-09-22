@@ -6,9 +6,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "node --check plugins/lark-connect/skills/lark-connect/scripts/session.mjs",
+    "build": "node --check plugins/lark-connect/skills/lark-chat-session/scripts/session.mjs",
     "test": "node --test",
-    "lint": "eslint plugins/lark-connect/skills/lark-connect/scripts tests eslint.config.js",
+    "lint": "eslint plugins/lark-connect/skills/lark-chat-session/scripts tests eslint.config.js",
     "quality": "npm run build && npm run lint && npm test"
   },
   "engines": {

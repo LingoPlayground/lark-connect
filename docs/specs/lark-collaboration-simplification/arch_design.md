@@ -75,11 +75,11 @@ plugins/lark-connect/
 ├── .codex-plugin/plugin.json               （改：移除模型上下文协议服务）
 ├── .claude-plugin/plugin.json              （改：描述技能能力）
 └── skills/
-    └── lark-connect/
+    └── lark-chat-session/
         ├── SKILL.md                        （改：官方配置、双身份和唤醒流程）
         └── scripts/session.mjs             （新增：绑定与扫描位置）
 tests/
-├── session-script.test.mjs                 （新增：绑定与检查点契约）
+├── session.test.mjs                        （新增：绑定与检查点契约）
 └── plugin-packaging.test.mjs               （改：纯技能载荷）
 src/                                        （删除：旧命令行、守护进程、SDK 与模型上下文协议）
 ```
@@ -96,7 +96,7 @@ src/                                        （删除：旧命令行、守护进
 
 | 模型 | 变更状态 | 代码或存储映射 |
 |---|---|---|
-| `ConnectionCheckpoint` | 本次新增 | `plugins/lark-connect/skills/lark-connect/scripts/session.mjs` 管理的本机 JSON 状态文件 |
+| `ConnectionCheckpoint` | 本次新增 | `plugins/lark-connect/skills/lark-chat-session/scripts/session.mjs` 管理的本机 JSON 状态文件 |
 | `Binding` | 计划移除 | `src/daemon/runtime.js` 的进程内绑定，改由 `ConnectionCheckpoint` 承接 |
 
 #### 2.3.2 模型详情
@@ -122,13 +122,13 @@ src/                                        （删除：旧命令行、守护进
 
 #### 3.1.2 设计
 
-`lark-connect` 技能引导用户使用 `lark-cli` 创建机器人配置、登录用户并授权。技能先显示配置档案及身份，再用 `lark-cli im +chat-search` 查群、用户身份用 `+chat-list --types p2p,group` 查单聊。机器人单聊不可直接列举时，使用带唯一文本的短时机器人消息事件确认目标；候选歧义交给用户选择。智能体直接用所选身份验证目标聊天可读，再调用 `session.mjs start` 保存绑定；权限拒绝和平台限制都显示为连接失败。上下文、成员、资源以及非聊天飞书操作直接按 `lark-cli` 对应技能和命令执行。
+`lark-chat-session` 技能引导用户使用 `lark-cli` 创建机器人配置、登录用户并授权。技能先显示配置档案及身份，再用 `lark-cli im +chat-search` 查群、用户身份用 `+chat-list --types p2p,group` 查单聊。机器人单聊不可直接列举时，使用带唯一文本的短时机器人消息事件确认目标；候选歧义交给用户选择。智能体直接用所选身份验证目标聊天可读，再调用 `session.mjs start` 保存绑定；权限拒绝和平台限制都显示为连接失败。上下文、成员、资源以及非聊天飞书操作直接按 `lark-cli` 对应技能和命令执行。
 
 ##### 3.1.2.1 接口设计
 
 ###### 3.1.2.1.1 `session.mjs`（插件脚本）
 
-- **使用方**：两个智能体运行时中的 `lark-connect` 技能。
+- **使用方**：两个智能体运行时中的 `lark-chat-session` 技能。
 - **设计理由**：一个短脚本集中执行单连接与跨唤醒扫描位置校验；它不解析飞书消息，也不包装飞书读写命令。
 - **输入与输出**：
 
@@ -252,9 +252,9 @@ sequenceDiagram
 | `plugins/lark-connect/codex.mcp.json` | Codex 插件服务注册 | 删除；纯技能插件 |
 | `plugins/lark-connect/.codex-plugin/plugin.json` | Codex 技能与服务清单 | 修改；移除服务并更新描述与版本 |
 | `plugins/lark-connect/.claude-plugin/plugin.json` | Claude Code 插件清单 | 修改；更新描述与版本 |
-| `plugins/lark-connect/skills/lark-connect/SKILL.md` | 旧工具调用流程 | 重写；双身份与官方命令流程 |
+| `plugins/lark-connect/skills/lark-chat-session/SKILL.md` | 旧工具调用流程 | 重写；双身份与官方命令流程 |
 | `plugins/lark-connect/skills/lark-connect-setup/SKILL.md` | 旧配置与服务流程 | 删除；官方配置引导合入主技能 |
-| `plugins/lark-connect/skills/lark-connect/agents/openai.yaml` | Codex 技能展示 | 修改；更新说明，保留英文展示名 |
+| `plugins/lark-connect/skills/lark-chat-session/agents/openai.yaml` | Codex 技能展示 | 修改；更新说明，保留英文展示名 |
 | `plugins/lark-connect/skills/lark-connect-setup/agents/openai.yaml` | Codex 配置技能展示 | 删除；仅保留主技能入口 |
 | `.agents/plugins/marketplace.json` | Codex 市场版本与描述 | 修改；同步新载荷 |
 | `.claude-plugin/marketplace.json` | Claude Code 市场版本与描述 | 修改；同步新载荷 |

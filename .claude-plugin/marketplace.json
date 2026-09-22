@@ -7,7 +7,7 @@
     {
       "name": "lark-connect",
       "version": "0.2.0",
-      "description": "通过 lark-cli 连接飞书聊天，以机器人或用户身份持续响应消息，并按需执行其他飞书操作。",
+      "description": "把当前智能体会话绑定到飞书聊天，以机器人或用户身份持续检查并按需回复消息。",
       "author": {"name": "LingoPlayground"},
       "source": "./plugins/lark-connect",
       "category": "productivity",

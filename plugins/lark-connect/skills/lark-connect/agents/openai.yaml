@@ -1,4 +1,0 @@
-interface:
-  display_name: "lark-connect"
-  short_description: "用指定飞书身份连接聊天，读取上下文并持续响应消息"
-  default_prompt: "选择 lark-cli 配置档案和机器人或用户身份，把当前会话连接到目标飞书聊天，读取上下文，按需回复并持续响应。"

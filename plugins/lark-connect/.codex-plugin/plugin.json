@@ -13,8 +13,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "lark-connect",
-    "shortDescription": "以指定飞书身份连接聊天，读取上下文并持续响应",
-    "longDescription": "lark-connect 通过官方 lark-cli 的配置档案、消息事件和聊天历史，把当前 Codex 或 Claude Code 会话连接到一个飞书聊天。机器人身份可接收事件；两种身份都可通过定期补查历史持续响应。技能中的小脚本只保存会话绑定和扫描位置。聊天回复、附件、提及以及其他飞书操作直接调用 lark-cli。",
+    "shortDescription": "把当前智能体会话绑定到飞书聊天并持续响应",
+    "longDescription": "lark-connect 的 lark-chat-session 技能在用户明确要求连接聊天时，通过官方 lark-cli 的配置档案、消息事件和聊天历史，把当前 Codex 或 Claude Code 会话绑定到一个飞书聊天。机器人身份可接收事件；两种身份都可通过定期补查历史持续响应。技能中的小脚本只保存会话绑定和扫描位置。",
     "developerName": "LingoPlayground",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],
