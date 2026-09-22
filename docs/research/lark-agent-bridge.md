@@ -1,6 +1,6 @@
 # Lark Agent Bridge Research
 
-> 历史调研：这里记录旧版自建命令行、守护进程和模型上下文协议服务的选型，不代表当前架构。现行插件使用官方 `lark-cli` 和技能，参见 [新架构设计](../specs/lark-collaboration-simplification/arch_design.md)。
+> 历史调研：这里记录旧版自建命令行、守护进程和模型上下文协议服务的选型，不代表当前架构。现行插件使用官方 `lark-cli` 和技能，参见 [新架构设计](../worklog/worklog-2026-09-22-feat-lark-cli-skill-migration/arch_design.md)。
 
 ## 背景
 

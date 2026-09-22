@@ -79,4 +79,4 @@ tests/                                  会话及插件载荷契约
 
 在仓库里运行 `npm ci` 后，使用 `npm run quality` 执行脚本语法、代码检查和测试。`package.json` 只供仓库开发，不含对外命令行入口或飞书接口依赖。版本 tag 的工作流验证插件并创建 GitHub Release，不再发布 npm 包。
 
-需求与架构记录见 [当前设计](docs/specs/lark-collaboration-simplification/arch_design.md)。
+迁移规格、架构与验收记录见 [本次工作记录](docs/worklog/worklog-2026-09-22-feat-lark-cli-skill-migration/arch_design.md)。
