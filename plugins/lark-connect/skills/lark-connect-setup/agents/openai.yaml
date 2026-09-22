@@ -1,4 +1,0 @@
-interface:
-  display_name: "lark-connect-setup"
-  short_description: "准备飞书命令行工具的配置档案与身份授权"
-  default_prompt: "引导我用 lark-cli 创建配置档案，登录或授权所选身份，并验证目标聊天可读。"

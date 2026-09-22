@@ -1,15 +1,19 @@
 ---
 name: lark-connect
-description: 把当前 Codex 或 Claude Code 会话连接到飞书群聊或单聊，使用指定的 lark-cli 配置档案和机器人或用户身份读取上下文、处理消息并持续响应；其他飞书操作按需直接使用 lark-cli。
+description: 准备 lark-cli 配置档案和机器人或用户身份，并把当前 Codex 或 Claude Code 会话连接到飞书群聊或单聊，读取上下文、处理消息并持续响应；其他飞书操作按需直接使用 lark-cli。
 ---
 
 # 飞书连接
 
 本技能只协调一个飞书聊天与当前智能体会话。飞书读写直接使用 `lark-cli`；本技能目录下的 `scripts/session.mjs` 只保存本机绑定和扫描检查点。不要寻找旧版模型上下文协议工具、守护进程或 `curiosea-lark-connect` 命令。
 
+## 准备配置档案
+
+运行 `lark-cli --version` 和 `lark-cli profile list`。缺少工具时按 [官方安装说明](https://github.com/larksuite/cli) 安装；缺少所需配置档案时，让用户运行 `lark-cli config init --name <名称>`，按官方引导创建机器人或登录、授权用户身份。应用密钥只交给官方交互引导或标准输入，不写进命令参数、聊天或仓库；不读取或迁移旧版凭据。用户身份需要授权时运行 `lark-cli --profile <名称> auth login --domain im`；无法等待交互时，按 `auth login --help` 使用 `--no-wait --json`。用 `lark-cli --profile <名称> doctor` 和 `lark-cli --profile <名称> whoami --as bot|user` 检查所选身份。权限不足时报告实际错误，不猜测其他身份或配置档案。
+
 ## 选择身份与聊天
 
-1. 按 `lark-connect-setup` 确认 `lark-cli` 可用。向用户说明将使用哪个配置档案，以及以机器人还是用户身份工作。所有飞书命令都显式传 `--profile <名称>` 和 `--as bot|user`；不要为了本次连接切换默认配置档案，也不要在失败时静默改用另一身份。
+1. 向用户说明将使用哪个配置档案，以及以机器人还是用户身份工作。所有飞书命令都显式传 `--profile <名称>` 和 `--as bot|user`；不要为了本次连接切换默认配置档案，也不要在失败时静默改用另一身份。
 2. 按任务查找聊天。群聊用 `lark-cli --profile <名称> im +chat-search --as <身份> --query '<关键词>'`；用户身份的单聊用 `im +chat-list --as user --types p2p,group`。多候选时让用户选定。机器人单聊不可列举时，先启动一次 `event consume im.message.receive_v1 --as bot --max-events 1 --timeout 60s`，再请用户在目标机器人单聊发送唯一挑战文本，以返回的 `chat_id` 确认目标；超时或其他消息不能当成绑定依据。
 3. 用所选身份执行 `im +chat-messages-list --chat-id <标识> --page-size 1`，确认聊天历史可读。若平台或权限阻止读取，不能声称该聊天可以可靠持续响应。记录群聊或单聊类型；机器人身份还需用 `whoami --as bot` 和聊天成员信息确认本应用与机器人的标识，供后续发送者和提及判断使用。
 4. 从运行时取得当前 Codex 任务或 Claude Code 会话的稳定标识。不得编造会话标识。用本技能目录下脚本的**绝对路径**执行：

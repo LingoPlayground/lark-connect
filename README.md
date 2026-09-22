@@ -7,8 +7,7 @@ lark-connect 是 Codex 和 Claude Code 共用的飞书协作技能。智能体�
 在本地智能体会话中说：
 
 ```text
-/lark-connect-setup 帮我准备飞书配置档案，并验证机器人身份。
-/lark-connect 以这个机器人身份连接【目标群】，持续处理明确提及它的消息。
+/lark-connect 帮我准备飞书配置档案，验证机器人身份，连接【目标群】并持续处理明确提及它的消息。
 ```
 
 也可以选择用户身份：
@@ -70,7 +69,7 @@ lark-cli --profile <配置档案名> whoami --as user
 ## 工程说明
 
 ```text
-plugins/lark-connect/skills/             双运行时技能
+plugins/lark-connect/skills/lark-connect/ Codex 与 Claude Code 共用技能
 plugins/lark-connect/skills/lark-connect/scripts/session.mjs
                                         单连接与扫描检查点
 plugins/lark-connect/.codex-plugin/       Codex 插件清单
