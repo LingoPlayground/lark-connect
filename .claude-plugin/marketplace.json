@@ -1,18 +1,14 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "lark-connect",
-  "description": "lark-connect 提供的双运行时插件，用于在 Codex 和 Claude Code 中搜索飞书或 Lark 群聊、发现机器人单聊、读取聊天上下文、查询群成员和机器人、@ 协作者并响应消息。",
-  "owner": {
-    "name": "LingoPlayground"
-  },
+  "description": "双运行时飞书插件：通过 lark-cli 配置档案连接聊天，以机器人或用户身份读取上下文、按需回复并持续响应消息。",
+  "owner": {"name": "LingoPlayground"},
   "plugins": [
     {
       "name": "lark-connect",
-      "version": "0.1.9",
-      "description": "通过本地模型上下文协议服务，把 Codex 和 Claude Code 会话连接到飞书或 Lark 聊天，让智能体搜索群聊、发现单聊、读取聊天上下文、查询成员和机器人、@ 协作者并长时间响应聊天消息。",
-      "author": {
-        "name": "LingoPlayground"
-      },
+      "version": "0.2.0",
+      "description": "通过 lark-cli 连接飞书聊天，以机器人或用户身份持续响应消息，并按需执行其他飞书操作。",
+      "author": {"name": "LingoPlayground"},
       "source": "./plugins/lark-connect",
       "category": "productivity",
       "homepage": "https://github.com/LingoPlayground/lark-connect"

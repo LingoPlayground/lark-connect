@@ -1,75 +1,16 @@
 ---
 name: lark-connect-setup
-description: 配置 lark-connect。当用户需要连接飞书或 Lark 机器人应用、把应用凭据保存到本地、验证机器人访问权限、启动或检查守护进程，或者排查模型上下文协议工具返回 DAEMON_NOT_RUNNING 或缺少应用凭据时使用。
+description: 为飞书连接准备官方 lark-cli 配置档案、机器人或用户身份和授权；验证指定身份是否能读取目标聊天。不处理旧版 lark-connect 凭据。
 ---
 
 # 飞书连接配置
 
-使用这个技能把本机准备好，之后智能体会话才能绑定到飞书聊天。
+本插件使用官方 `lark-cli`。用户自行按其引导创建机器人应用或登录、授权用户身份；插件不读取、迁移或删除旧版 lark-connect 配置，也不要求启动本仓库守护进程。
 
-## 流程
+1. 运行 `lark-cli --version` 和 `lark-cli profile list`。缺少工具时，按 [官方安装说明](https://github.com/larksuite/cli) 安装，之后用 `lark-cli --help` 确认命令。
+2. 让用户明确选择配置档案及 `bot` 或 `user` 身份。创建或绑定配置档案时，优先运行 `lark-cli config init --name <名称>` 并按交互引导操作；已有应用也可查看 `lark-cli profile add --help`，从标准输入提供应用密钥，避免在命令参数、日志或聊天中暴露。不要替用户猜测配置档案，也不要自动调用 `profile use` 切换默认档案。
+3. 用户身份需要授权时，用 `lark-cli --profile <名称> auth login --domain im` 按设备授权引导操作；如果当前智能体工具无法一边等待一边展示登录链接，按 `auth login --help` 使用 `--no-wait --json`，待用户完成授权后继续。机器人身份需要飞书后台授予相应权限并订阅 `im.message.receive_v1` 事件。是否需要额外权限以实际操作和 `lark-cli` 错误为准。
+4. 用 `lark-cli --profile <名称> doctor`、`lark-cli --profile <名称> whoami --as bot|user` 检查当前身份。再以**同一身份**读取目标聊天：`lark-cli --profile <名称> im +chat-messages-list --as bot|user --chat-id <标识> --page-size 1`。若权限不足，报告缺失权限或平台限制；不要静默切换身份。
+5. 旧版机器人连接若仍在运行，先引导用户停止旧连接，再用新技能绑定同一个聊天，避免两个接收者同时回复。新连接失败时，旧版配置仍在原处，可由用户手动恢复；本插件不会操作它。
 
-1. 检查包命令是否可用：
-
-```bash
-npx -y curiosea-lark-connect@latest --help
-```
-
-后续示例都使用同一个发布包命令，除非用户已经明确全局安装了可用版本。
-
-2. 如果缺少凭据，先输出配置引导：
-
-```bash
-npx -y curiosea-lark-connect@latest setup
-```
-
-用户提供应用 ID 和应用密钥后，保存到本地配置：
-
-```bash
-npx -y curiosea-lark-connect@latest setup --app-id cli_xxx --app-secret <secret>
-```
-
-不要在 setup 阶段要求或保存聊天 ID。聊天 ID 属于会话绑定参数。
-
-3. 提醒用户确认飞书后台前置条件：
-
-- 如果目标是群聊，机器人已经加入目标群。
-- 如果目标是单聊，用户可以打开机器人单聊并发送智能体给出的挑战文本。
-- 应用已经开通接收消息事件需要的权限和事件订阅。
-- 如果后续需要发送消息、添加 reaction、下载资源，相应权限也要在飞书后台开通。
-
-4. 凭据保存后运行真实连通性检查：
-
-```bash
-npx -y curiosea-lark-connect@latest doctor --live
-```
-
-5. 当模型上下文协议工具返回 `DAEMON_NOT_RUNNING` 时，启动守护进程：
-
-```bash
-npx -y curiosea-lark-connect@latest daemon start
-```
-
-`daemon start` 默认在后台启动并立即返回。不要在智能体对话里使用 `daemon start --foreground`，它会长时间占住当前 shell。
-
-然后检查状态：
-
-```bash
-npx -y curiosea-lark-connect@latest daemon status
-```
-
-排查监听或投递时查看最近结构化日志：
-
-```bash
-npx -y curiosea-lark-connect@latest logs --tail 50
-npx -y curiosea-lark-connect@latest logs --agent-session-id <绑定时使用的 agentSessionId> --tail 50
-```
-
-不带 `--agent-session-id` 时读取 daemon 日志，主要用于确认守护进程启动、停止、未绑定聊天事件和单聊发现事件。带 `--agent-session-id` 时读取对应会话日志，主要用于确认消息入队、等待、投递、确认，以及已绑定聊天里的路由决策。
-
-## 规则
-
-- 不要把应用密钥回显给用户。
-- 优先使用 `setup` 创建的本地配置文件；不要把密钥写入插件清单或模型上下文协议配置。
-- 守护进程在 1 小时内没有飞书事件或本地智能体调用后会自动退出。后续调用再次返回 `DAEMON_NOT_RUNNING` 时，重新启动守护进程。
-- 如果在智能体对话里执行配置，只在缺少凭据时说明用户需要打开的飞书应用后台页面。
+用户准备好配置档案后，继续使用 `lark-connect` 技能完成聊天查找、绑定和持续响应。不要把应用密钥、访问令牌或原始配置文件发送到聊天。

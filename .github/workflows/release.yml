@@ -1,23 +1,15 @@
 name: Release
 
-# Canonical release path: bump package.json in a PR, merge to main,
-# then push tag v<package.version>. Manual dispatch is for workflow
-# dry-run validation and will not publish unless invoked on a tag ref
-# with dry_run=false.
+# Push v<package.version> after merging the plugin changes to main.
+# Manual dispatch validates the checkout without creating a release.
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Build and test, but skip npm publish'
-        type: boolean
-        default: true
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   release:
@@ -31,11 +23,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Upgrade npm
-        run: npm install -g npm@latest
+          node-version: '22'
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -46,34 +35,15 @@ jobs:
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION=$(node -p "require('./package.json').version")
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag '$GITHUB_REF_NAME' does not match package.json version '$PKG_VERSION'. Bump package.json or push the correct tag."
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match package.json version '$PKG_VERSION'."
             exit 1
           fi
-          echo "Tag and package.json version agree: $PKG_VERSION"
 
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run build
-
-      - name: Pack dry run
-        run: npm pack --dry-run
-
-      - name: Publish to npm
-        if: |
-          startsWith(github.ref, 'refs/tags/v') && (
-            github.event_name == 'push' ||
-            (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
-          )
-        run: npm publish --access public --provenance
+      - name: Validate plugin
+        run: npm run quality
 
       - name: Create GitHub Release
-        if: |
-          startsWith(github.ref, 'refs/tags/v') && (
-            github.event_name == 'push' ||
-            (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
-          )
+        if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
