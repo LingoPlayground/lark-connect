@@ -4,7 +4,7 @@ import globals from "globals";
 export default [
   js.configs.recommended,
   {
-    files: ["src/**/*.js", "tests/**/*.mjs", "eslint.config.js"],
+    files: ["plugins/lark-connect/skills/**/*.mjs", "tests/**/*.mjs", "eslint.config.js"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -29,12 +29,6 @@ export default [
       "prefer-const": ["error", { destructuring: "all", ignoreReadBeforeAssign: true }],
       "prefer-promise-reject-errors": "error",
       radix: "error",
-    },
-  },
-  {
-    files: ["src/cli.js"],
-    rules: {
-      "no-console": "off",
     },
   },
 ];

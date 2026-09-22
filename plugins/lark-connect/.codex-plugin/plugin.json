@@ -1,7 +1,7 @@
 {
   "name": "lark-connect",
-  "version": "0.1.9",
-  "description": "通过本地模型上下文协议服务，把 Codex 和 Claude Code 会话连接到飞书或 Lark 聊天，让智能体搜索群聊、发现单聊、读取聊天上下文、查询成员和机器人、@ 协作者并长时间响应聊天消息。",
+  "version": "0.2.0",
+  "description": "通过 lark-cli 配置档案，以机器人或用户身份把 Codex 会话连接到飞书聊天，读取上下文并持续响应消息。",
   "author": {
     "name": "LingoPlayground",
     "url": "https://github.com/LingoPlayground"
@@ -9,33 +9,20 @@
   "homepage": "https://github.com/LingoPlayground/lark-connect",
   "repository": "https://github.com/LingoPlayground/lark-connect",
   "license": "MIT",
-  "keywords": [
-    "lark",
-    "feishu",
-    "mcp",
-    "codex",
-    "claude-code",
-    "design-review"
-  ],
+  "keywords": ["lark", "feishu", "codex", "claude-code", "chat"],
   "skills": "./skills/",
-  "mcpServers": "./codex.mcp.json",
   "interface": {
     "displayName": "lark-connect",
-    "shortDescription": "搜索飞书群聊或用挑战码发现单聊，把 Codex 和 Claude Code 会话接入聊天上下文和消息响应流程",
-    "longDescription": "lark-connect 打包本地模型上下文协议服务和工作流技能，用于搜索机器人可见的飞书群聊，或通过 lark_connect_wait_direct_chat_signal 等待用户给机器人单聊发送挑战码来发现单聊 chatId，再把 Codex thread 或 Claude Code session 绑定到飞书聊天。绑定后可以用 lark_connect_get_chat_context 读取近期聊天上下文，用 lark_connect_get_chat_members 查询人类成员和群内机器人，发送文本、文件、图片和视频，回复原消息，@ 人类同事或其他机器人，确认已处理消息，并下载收到的资源。群聊只接收明确提及机器人的消息；已绑定单聊不要求提及。短等待使用 MCP wait；长时间响应交给 Codex thread automation 或 Claude Code background shell 定时唤醒。",
+    "shortDescription": "把当前智能体会话绑定到飞书聊天并持续响应",
+    "longDescription": "lark-connect 的 lark-chat-session 技能在用户明确要求连接聊天时，通过官方 lark-cli 的配置档案、消息事件和聊天历史，把当前 Codex 或 Claude Code 会话绑定到一个飞书聊天。机器人身份可接收事件；两种身份都可通过定期补查历史持续响应。技能中的小脚本只保存会话绑定和扫描位置。",
     "developerName": "LingoPlayground",
     "category": "Productivity",
-    "capabilities": [
-      "Read",
-      "Write"
-    ],
+    "capabilities": ["Read", "Write"],
     "websiteURL": "https://github.com/LingoPlayground/lark-connect",
     "defaultPrompt": [
-      "帮我配置飞书机器人应用的 lark-connect。",
-      "搜索目标飞书群，把当前智能体会话绑定到聊天，读取群聊上下文，并发送最新截图。",
-      "用挑战码发现机器人单聊，把当前智能体会话绑定到这个单聊。",
-      "查询群成员和群内机器人，@ 相关协作者后持续响应绑定聊天里的消息。",
-      "回复收到的消息时，必须把该消息的 larkMessageId 作为 replyToMessageId。"
+      "帮我配置 lark-cli 的飞书身份，再连接目标聊天。",
+      "以机器人身份连接这个群聊，读取上下文并持续响应明确提及我的消息。",
+      "以用户身份连接这个聊天，检查所有新消息并按需回复。"
     ]
   }
 }

@@ -1,7 +1,0 @@
-{
-  "lark-connect": {
-    "command": "npx",
-    "args": ["-y", "curiosea-lark-connect@latest", "mcp"],
-    "env": {}
-  }
-}

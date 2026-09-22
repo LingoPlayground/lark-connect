@@ -69,28 +69,25 @@
 ## 项目边界
 
 - 这是 Node.js ECMAScript Module（ECMAScript 模块）项目，运行时要求 Node.js 22 或更新版本。不要引入构建步骤或转译层，除非有明确收益。
-- 核心能力必须基于本仓库代码和 `@larksuiteoapi/node-sdk`。不要让正式路径依赖 `lark-cli`；`lark-cli` 只能作为人工真实环境排查工具。
-- 仓库根目录不提交 `.mcp.json` 或 `.codex/config.toml`。正式入口只通过 `plugins/lark-connect/` 里的插件 MCP 描述暴露。
-- 用户文档和插件技能里的正式命令使用 `npx -y curiosea-lark-connect@latest ...`；`node src/cli.js ...` 只用于 README 的本地开发或测试说明。
+- 正式飞书操作使用官方 `lark-cli`；本仓库只提供 Codex 和 Claude Code 共用的技能，以及保存单连接和扫描位置的本机脚本。不要重新包装飞书读写接口或增加守护进程、模型上下文协议服务。
+- 仓库根目录不提交 `.mcp.json` 或 `.codex/config.toml`。正式入口是 `plugins/lark-connect/` 中的双运行时技能载荷。
 
 ## 配置和安全
 
-- 应用 ID 和应用密钥只通过 `setup` 写入本机配置文件，或由运行时环境变量临时覆盖。不要写进测试夹具、插件清单、MCP 配置、README 示例输出或 PR 描述。
-- `setup` 只处理应用级配置，不能保存聊天 ID。聊天 ID 始终通过 `lark_connect_bind_session` 绑定到当前会话。
-- 如无必要，勿增实体。守护进程当前只使用内存状态；不要为了方便调试新增持久化绑定、消息表或数据库。
-- 当前同一时间只允许一个聊天和一个智能体会话绑定。改变这个约束属于外部行为变更，必须先写清需求和迁移策略。
+- 用户自行通过 `lark-cli` 引导创建配置档案及授权；插件不读取、迁移或删除旧版凭据。不要把应用密钥或令牌写入测试、插件、文档或 PR。
+- 当前同一时间只允许一个聊天和一个智能体会话绑定。会话脚本只保存配置档案名、身份、聊天标识、会话标识、连接代次和扫描位置，不保存聊天正文或逐消息账本。
+- 所有飞书命令必须显式指定配置档案及机器人或用户身份；身份访问失败时不得静默切换。改变单连接约束须先写清需求和迁移策略。
 
 ## 代码和测试
 
-- CLI（Command Line Interface，命令行接口）行为变化要同步更新 `tests/cli.test.mjs`，MCP 工具变化要同步更新 `tests/mcp*.test.mjs`，守护进程路由和状态变化要同步更新 `tests/daemon*.test.mjs`。
-- 插件载荷、技能、市场清单或 MCP 描述变化要同步更新 `tests/plugin-packaging.test.mjs`。
+- 会话脚本行为变化同步更新 `tests/session.test.mjs`；插件载荷或市场清单变化同步检查 `tests/plugin-packaging.test.mjs`。
 - 修改用户可见安装、配置、等待或聊天消息处理流程时，同步更新 `README.md` 和相关 skill。
-- 涉及真实飞书消息链路的变更，除自动化测试外，应尽量用 `lark-cli` 做一次端到端验证：让 `lark-cli` 以人工用户身份发送、@ 机器人或上传资源，用本仓库 CLI 或 MCP 工具完成搜索聊天、绑定会话、等待/轮询、回复、确认和日志检查。验证记录只写通用步骤、现象和结论，不要把个人群名、聊天 ID、应用 ID、应用密钥或其他私有环境信息写进仓库。
-- 纯文档改动至少运行 `git diff --check`，并用 `rg` 检查是否留下过时路径或命令。代码改动至少运行相关 `node --test ...` 和 `npm run build`；发布前运行 `npm test` 与 `npm pack --dry-run`。
+- 涉及真实飞书消息链路的变更，用明确指定的测试聊天和身份做端到端验证：连接、消息发现、原消息回复、完成反应、空窗补查与停止。验证记录只写通用步骤和结论，不写私人聊天或凭据信息。
+- 纯文档改动至少运行 `git diff --check` 并检查过时命令。代码改动至少运行相关 `node --test ...` 与 `npm run build`；发布前运行 `npm run quality`。
 
 ## 插件和发布
 
 - 插件是 Codex 和 Claude Code 两用载荷。改技能或插件描述时，要同时检查 `.codex-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.agents/plugins/marketplace.json` 和 `.claude-plugin/marketplace.json` 是否需要同步。
 - Codex 专属 `agents/openai.yaml` 里的 `display_name` 保持英文原始技能名，不要改成中文展示名。
 - 只要插件用户可见能力发生变化，就要评估插件 manifest 版本和市场描述是否需要更新。
-- npm 发布通过 tag 和 GitHub Actions Trusted Publishing 完成，不在本机手工执行 `npm publish`。
+- 本仓库为私有开发包；版本 tag 触发插件的 GitHub Release，不再发布 npm 包。

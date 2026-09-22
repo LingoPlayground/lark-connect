@@ -1,20 +1,12 @@
 {
   "name": "lark-connect",
-  "interface": {
-    "displayName": "lark-connect"
-  },
+  "interface": {"displayName": "lark-connect"},
   "plugins": [
     {
       "name": "lark-connect",
-      "version": "0.1.9",
-      "source": {
-        "source": "local",
-        "path": "./plugins/lark-connect"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
+      "version": "0.2.0",
+      "source": {"source": "local", "path": "./plugins/lark-connect"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
       "category": "Productivity"
     }
   ]

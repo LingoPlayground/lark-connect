@@ -1,5 +1,7 @@
 # Lark Agent Bridge Research
 
+> 历史调研：这里记录旧版自建命令行、守护进程和模型上下文协议服务的选型，不代表当前架构。现行插件使用官方 `lark-cli` 和技能，参见 [新架构设计](../worklog/worklog-2026-09-22-feat-lark-cli-skill-migration/arch_design.md)。
+
 ## 背景
 
 目标是做一个 Codex 插件，其中包含一个核心 MCP 服务，让本地 Codex 和 Claude Code 会话可以连接到飞书群。典型流程是：本地会话把截图、录屏或阶段性结果发送到群里，设计师和产品经理在群里提及机器人给出反馈，本地会话收到消息后继续修改、验证并回传。
