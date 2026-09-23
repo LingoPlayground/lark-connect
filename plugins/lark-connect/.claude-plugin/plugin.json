@@ -1,7 +1,7 @@
 {
   "name": "lark-connect",
-  "version": "0.2.0",
-  "description": "通过 lark-cli 配置档案，以机器人或用户身份把 Claude Code 会话连接到飞书聊天，读取上下文并持续响应消息。",
+  "version": "0.3.0",
+  "description": "通过 lark-cli 把 Claude Code 会话连接到飞书聊天；不同聊天可并行绑定，身份按聊天用途选择。",
   "author": {"name": "LingoPlayground"},
   "homepage": "https://github.com/LingoPlayground/lark-connect",
   "repository": "https://github.com/LingoPlayground/lark-connect",

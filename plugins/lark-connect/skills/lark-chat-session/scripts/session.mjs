@@ -7,8 +7,8 @@ import { join } from "node:path";
 
 const stateHome = process.env.XDG_STATE_HOME || join(homedir(), ".local", "state");
 const directory = join(stateHome, "lark-connect");
-const file = join(directory, "connection.json");
-const lock = join(directory, "connection.lock");
+const file = join(directory, "connections.json");
+const lock = join(directory, "connections.lock");
 
 class SessionError extends Error {
   constructor(code, message) {
@@ -46,9 +46,12 @@ function parseArguments(args) {
   if (required.some((key) => !options[key])) {
     throw new SessionError("INVALID_INPUT", `Missing required arguments for ${action}`);
   }
-  const allowed = new Set(required);
+  const allowed = new Set(action === "status" ? ["--session-id", "--chat-id"] : required);
   if (Object.keys(options).some((key) => key !== "replace" && !allowed.has(key))) {
     throw new SessionError("INVALID_INPUT", `Unexpected argument for ${action}`);
+  }
+  if (action === "status" && options["--session-id"] && options["--chat-id"]) {
+    throw new SessionError("INVALID_INPUT", "Choose one status filter");
   }
   if (action === "start" && (!["bot", "user"].includes(options["--as"]) || !["codex", "claude-code"].includes(options["--runtime"]))) {
     throw new SessionError("INVALID_INPUT", "Identity must be bot or user; runtime must be codex or claude-code");
@@ -56,33 +59,44 @@ function parseArguments(args) {
   return { action, options };
 }
 
-function readConnection() {
+function readRegistry() {
   try {
     const state = JSON.parse(readFileSync(file, "utf8"));
-    if (state.status === "stopped") return null;
-    if (state.status !== "active" || !state.generation || !state.sessionId || !state.scanThrough) {
-      throw new Error("Invalid connection state");
+    if (state.schemaVersion !== 2 || !Array.isArray(state.connections)) {
+      throw new Error("Invalid registry state");
+    }
+    const chats = new Set();
+    const sessions = new Set();
+    for (const connection of state.connections) {
+      if (connection.status !== "active" || !connection.profile || !["bot", "user"].includes(connection.as)
+        || !connection.chatId || !["codex", "claude-code"].includes(connection.runtime)
+        || !connection.sessionId || !connection.generation || !Number.isFinite(Date.parse(connection.scanThrough))
+        || chats.has(connection.chatId) || sessions.has(connection.sessionId)) {
+        throw new Error("Invalid connection state");
+      }
+      chats.add(connection.chatId);
+      sessions.add(connection.sessionId);
     }
     return state;
   } catch (error) {
-    if (error.code === "ENOENT") return null;
+    if (error.code === "ENOENT") return { schemaVersion: 2, connections: [] };
     throw new SessionError("STATE_CORRUPT", "The connection checkpoint cannot be read safely");
   }
 }
 
-function writeConnection(connection) {
+function writeRegistry(registry) {
   const temporary = join(directory, `connection.${randomUUID()}.tmp`);
   try {
-    writeFileSync(temporary, `${JSON.stringify(connection)}\n`, { mode: 0o600, flag: "wx" });
+    writeFileSync(temporary, `${JSON.stringify(registry)}\n`, { mode: 0o600, flag: "wx" });
     renameSync(temporary, file);
   } finally {
     if (existsSync(temporary)) unlinkSync(temporary);
   }
 }
 
-function currentConnection(options) {
-  const connection = readConnection();
-  if (!connection || connection.sessionId !== options["--session-id"] || connection.generation !== options["--generation"]) {
+function currentConnection(registry, options) {
+  const connection = registry.connections.find((item) => item.sessionId === options["--session-id"]);
+  if (!connection || connection.generation !== options["--generation"]) {
     throw new SessionError("STALE_SESSION", "This operation does not belong to the active connection");
   }
   return connection;
@@ -105,10 +119,19 @@ function mutate(action, options) {
     mkdirSync(lock, { mode: 0o700 });
   }
   try {
+    const registry = readRegistry();
     if (action === "start") {
-      if (readConnection() && !options.replace) {
-        throw new SessionError("ALREADY_BOUND", "Stop or explicitly replace the current connection first");
+      const chatOwner = registry.connections.find((item) => item.chatId === options["--chat-id"]);
+      const sessionOwner = registry.connections.find((item) => item.sessionId === options["--session-id"]);
+      if (chatOwner && sessionOwner && chatOwner !== sessionOwner) {
+        throw new SessionError("MULTIPLE_CONFLICTS", "The chat and session belong to different connections; stop them separately");
       }
+      if ((chatOwner || sessionOwner) && !options.replace) {
+        const owner = chatOwner || sessionOwner;
+        const code = chatOwner ? "CHAT_ALREADY_BOUND" : "SESSION_ALREADY_BOUND";
+        throw new SessionError(code, `Chat ${owner.chatId} is already bound to ${owner.runtime} session ${owner.sessionId}`);
+      }
+      if (chatOwner || sessionOwner) registry.connections.splice(registry.connections.indexOf(chatOwner || sessionOwner), 1);
       const connection = {
         status: "active",
         profile: options["--profile"],
@@ -119,10 +142,11 @@ function mutate(action, options) {
         generation: randomUUID(),
         scanThrough: new Date().toISOString(),
       };
-      writeConnection(connection);
+      registry.connections.push(connection);
+      writeRegistry(registry);
       return { ok: true, connection };
     }
-    const connection = currentConnection(options);
+    const connection = currentConnection(registry, options);
     if (action === "checkpoint") {
       const through = options["--through"];
       const timestamp = Date.parse(through);
@@ -133,10 +157,11 @@ function mutate(action, options) {
         throw new SessionError("CHECKPOINT_REGRESSION", "Checkpoint cannot move backwards");
       }
       connection.scanThrough = through;
-      writeConnection(connection);
+      writeRegistry(registry);
       return { ok: true, scanThrough: through };
     }
-    writeConnection({ status: "stopped" });
+    registry.connections.splice(registry.connections.indexOf(connection), 1);
+    writeRegistry(registry);
     return { ok: true, status: "stopped" };
   } finally {
     rmdirSync(lock);
@@ -145,9 +170,14 @@ function mutate(action, options) {
 
 try {
   const { action, options } = parseArguments(process.argv.slice(2));
-  const connection = action === "status" ? readConnection() : null;
+  const registry = action === "status" ? readRegistry() : null;
   const result = action === "status"
-    ? (connection ? { ok: true, connection } : { ok: true, status: "stopped" })
+    ? (options["--session-id"] || options["--chat-id"]
+      ? (() => {
+        const connection = registry.connections.find((item) => item.sessionId === options["--session-id"] || item.chatId === options["--chat-id"]);
+        return connection ? { ok: true, connection } : { ok: true, status: "stopped" };
+      })()
+      : { ok: true, connections: registry.connections })
     : mutate(action, options);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 } catch (error) {
