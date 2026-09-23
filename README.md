@@ -60,7 +60,7 @@ lark-cli --profile <配置档案名> whoami --as user
 
 持续响应时，机器人活跃会话可以限时监听消息事件；两种身份都通过目标聊天历史补查事件空窗。无人值守阶段使用 Codex 当前任务的心跳或 Claude Code `/loop` 唤醒同一会话。运行时、本机或授权不可用时无法实时唤醒；恢复后从上次完整扫描位置补查仍可读取的消息。要停止时，在原会话中要求停止，技能会撤销唤醒并解除绑定。
 
-本地检查点默认存放在 `${XDG_STATE_HOME:-~/.local/state}/lark-connect/connections.json`，仅保存配置档案名、身份、聊天与会话标识、连接代次和扫描位置；不保存令牌、聊天正文或逐消息账本。可以执行 `node <插件技能目录>/scripts/session.mjs status` 查看全部绑定，或加 `--session-id <当前会话标识>` 查看当前会话。升级前先停止旧版活动绑定及唤醒，再重新连接；本次不迁移旧版活动状态。
+本地检查点默认存放在 `${XDG_STATE_HOME:-~/.local/state}/lark-connect/connections.json`，仅保存配置档案名、身份、聊天与会话标识、连接代次和扫描位置；不保存令牌、聊天正文或逐消息账本。可以执行 `node <插件技能目录>/scripts/session.mjs status` 查看全部绑定，或加 `--session-id <当前会话标识>` 查看当前会话。若旧版仍在处理同一个聊天，先停止旧绑定及唤醒，再用新版连接；本次不迁移旧版活动状态。
 
 ### 从旧版切换
 
