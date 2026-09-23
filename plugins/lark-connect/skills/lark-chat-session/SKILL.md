@@ -5,28 +5,30 @@ description: 当用户明确要求把当前 Codex 任务或 Claude Code 会话�
 
 # 飞书聊天会话连接
 
-本技能只协调一个飞书聊天与当前智能体会话。飞书读写直接使用 `lark-cli`；本技能目录下的 `scripts/session.mjs` 只保存本机绑定和扫描检查点。不要寻找旧版模型上下文协议工具、守护进程或 `curiosea-lark-connect` 命令。
+本技能把当前智能体会话连接到一个飞书聊天；同一台机器上的其他会话可连接不同聊天。飞书读写直接使用 `lark-cli`；本技能目录下的 `scripts/session.mjs` 只保存绑定和各自的扫描检查点。不要寻找旧版模型上下文协议工具、守护进程或 `curiosea-lark-connect` 命令。
 
 ## 准备配置档案
 
-运行 `lark-cli --version` 和 `lark-cli profile list`。缺少工具时按 [官方安装说明](https://github.com/larksuite/cli) 安装；缺少所需配置档案时，让用户运行 `lark-cli config init --name <名称>`，按官方引导创建机器人或登录、授权用户身份。应用密钥只交给官方交互引导或标准输入，不写进命令参数、聊天或仓库；不读取或迁移旧版凭据。用户身份需要授权时运行 `lark-cli --profile <名称> auth login --domain im`；无法等待交互时，按 `auth login --help` 使用 `--no-wait --json`。用 `lark-cli --profile <名称> doctor` 和 `lark-cli --profile <名称> whoami --as bot|user` 检查所选身份。权限不足时报告实际错误，不猜测其他身份或配置档案。
+运行 `lark-cli --version` 和 `lark-cli profile list`。缺少工具时按 [官方安装说明](https://github.com/larksuite/cli) 安装；缺少所需配置档案时，让用户运行 `lark-cli config init --name <名称>`，按官方引导创建机器人或登录、授权用户身份。应用密钥只交给官方交互引导或标准输入，不写进命令参数、聊天或仓库；不读取或迁移旧版凭据。用户身份需要授权时运行 `lark-cli --profile <名称> auth login --domain im`；无法等待交互时，按 `auth login --help` 使用 `--no-wait --json`。逐个用 `whoami --as bot` 检查机器人配置档案，用 `lark-cli --profile <名称> api GET /open-apis/bot/v3/info --as bot` 核实机器人名称和标识。多个机器人可用时，先展示机器人名称与配置档案名，请用户选择，选择前不查找目标聊天或执行写操作；只有一个时直接采用并告知用户。选定后用同档案 `doctor` 与 `whoami --as bot|user` 检查本次所需身份。权限不足时报告实际错误，不猜测其他身份或配置档案。
 
 ## 选择身份与聊天
 
-1. 向用户说明将使用哪个配置档案，以及以机器人还是用户身份工作。所有飞书命令都显式传 `--profile <名称>` 和 `--as bot|user`；不要为了本次连接切换默认配置档案，也不要在失败时静默改用另一身份。
-2. 按任务查找聊天。群聊用 `lark-cli --profile <名称> im +chat-search --as <身份> --query '<关键词>'`；用户身份的单聊用 `im +chat-list --as user --types p2p,group`。多候选时让用户选定。机器人单聊不可列举时，后台启动 `event consume im.message.receive_v1 --as bot --max-events 1 --timeout 60s`，确认监听就绪后再请用户发送唯一挑战文本；仅用匹配该文本的事件确认 `chat_id`，超时或其他消息不能当成绑定依据。
-3. 用所选身份执行 `im +chat-messages-list --chat-id <标识> --page-size 1`，确认聊天历史可读。若平台或权限阻止读取，不能声称该聊天可以可靠持续响应。记录群聊或单聊类型；机器人身份还需用 `whoami --as bot` 和聊天成员信息确认本应用与机器人的标识，供后续发送者和提及判断使用。
-4. 从运行时取得当前 Codex 任务或 Claude Code 会话的稳定标识。不得编造会话标识。用本技能目录下脚本的**绝对路径**执行：
+1. 向用户说明选定配置档案和最终身份。群聊默认 `bot`；用户与所选机器人的私聊也用 `bot`，用于从飞书控制当前智能体会话；用户与真人同事的私聊用 `user`，由当前会话帮助同事。若用户明确指定其他身份，先确认该身份与目标用途是否一致。所有飞书命令显式传 `--profile <名称>` 和 `--as bot|user`，不切换默认档案，也不在失败时静默改用另一身份。
+2. 群聊先用机器人身份 `im +chat-search --as bot --query '<关键词>'` 查找。机器人查不到时，用**同一档案**的用户身份查找并确认唯一群聊，再用 `im +chat-members-list --as user --chat-id <标识> --page-all` 核实机器人是否缺席；分页不完整或成员被截断时不要据此判定缺席。确定缺席后，向用户说明将用该档案的用户身份邀请所选机器人，按 `lark-cli schema im.chat.members.create` 核对参数，执行 `lark-cli --profile <名称> im chat.members create --as user --chat-id <群标识> --member-id-type app_id --data '{"id_list":["<应用标识>"]}'`。检查失败、待审批及无效标识，再以机器人身份重新确认入群和历史可读；若无法确认，报告实际错误并停止，不改为用户身份绑定群聊。
+3. 本人私聊优先以同档案用户身份 `im +chat-list --as user --types p2p,group --page-all` 查找 `p2p_target_type=bot` 且 `p2p_target_id` 等于所选机器人的 `open_id` 的聊天；这是定位步骤，最终读取、绑定和回复仍用机器人身份。用户身份不可用或不能唯一定位时，后台启动 `event consume im.message.receive_v1 --as bot --max-events 1 --timeout 60s`，确认监听就绪后请用户给所选机器人发送唯一挑战文本；仅用匹配文本，且用已核实的当前用户标识确认发送者，才能确定聊天。超时或其他消息不能当成绑定依据，不得误连用户发给自己的单聊。
+4. 同事私聊用同档案用户身份 `im +chat-list --as user --types p2p,group --page-all` 查找，确认 `p2p_target_type=user` 和同事标识；同名或多候选时请用户选择。不得自动创建联系关系或在身份不可用时改用机器人。
+5. 用最终身份执行 `im +chat-messages-list --as <身份> --chat-id <标识> --page-size 1`，确认聊天历史可读。若平台或权限阻止读取，不能声称该聊天可以可靠持续响应。记录群聊或单聊类型；机器人身份还需核实本应用与机器人的标识，供后续发送者和提及判断使用。
+6. 从运行时取得当前 Codex 任务或 Claude Code 会话的稳定标识。不得编造会话标识。用本技能目录下脚本的**绝对路径**执行：
 
 ```bash
 node <本技能目录>/scripts/session.mjs start --profile <名称> --as bot|user --chat-id <标识> --runtime codex|claude-code --session-id <稳定标识>
 ```
 
-已有绑定时，只有用户明确要求接管、旧唤醒已撤销且旧会话的在途处理已结束，才加 `--replace`；无法确认时先报告，暂不接管，避免两个会话同时写入。`start` 返回连接代次 `generation` 与初始扫描位置 `scanThrough`。先读近期聊天消息建立上下文；连接前的旧消息只作背景，除非用户明确要求处理。
+不同聊天可以由不同会话并行连接；同一聊天只能有一个会话，同一会话只能连接一个聊天。冲突时先用 `session.mjs status` 定位占用者；只有用户明确要求接管、旧唤醒已撤销且旧会话的在途处理已结束，才加 `--replace`。`start` 返回连接代次 `generation` 与初始扫描位置 `scanThrough`。先读近期聊天消息建立上下文；连接前的旧消息只作背景，除非用户明确要求处理。
 
 ## 检查新消息
 
-- 每次唤醒先调用 `node <本技能目录>/scripts/session.mjs status`。只处理 `connection.status=active` 且会话标识、连接代次仍与本轮一致的连接。使用返回的配置档案、身份和聊天标识，不从当前默认配置推断。
+- 每次唤醒先调用 `node <本技能目录>/scripts/session.mjs status --session-id <当前会话标识>`。无参数 `status` 列出全部活动绑定，供管理和排查。只处理 `connection.status=active` 且会话标识、连接代次仍与本轮一致的连接。使用返回的配置档案、身份和聊天标识，不从当前默认配置推断。
 - 机器人活跃时可用 `lark-cli --profile <名称> event consume im.message.receive_v1 --as bot --max-events 1 --timeout 60s` 降低延迟。只接受目标聊天的事件；超时是正常结束。事件是候选信号，不能代替历史补查。用户身份没有对应的消息接收事件，直接检查历史。
 - 在一轮检查开始时记录当前时间为窗口终点。从 `scanThrough` 前适度重叠的位置，用 `lark-cli --profile <名称> im +chat-messages-list --as <身份> --chat-id <标识> --start <起点> --end <终点> --order asc` 读取。逐页跟随 `has_more` 和 `page_token`；使用 `--page-all` 时也必须检查 `meta.pagination.complete`。按消息标识排除本轮重复结果，不能只看第一页或把空页当作完整结果。
 - 话题群带时间窗的 `+chat-messages-list` 可能漏掉旧话题的新回复。遇到话题群，按 `lark-cli api --help` 和飞书接口文档核实参数后，用 `lark-cli --profile <名称> api GET /open-apis/im/v1/messages --as <身份> --params '{"container_id_type":"chat","container_id":"oc_xxx","only_thread_root_messages":false,"start_time":"<起点秒数>","end_time":"<终点秒数>","sort_type":"ByCreateTimeAsc","page_size":50}'` 读取并完整翻页。原始结果需要按消息标识读取详情。若上游不支持该查询或不能证明覆盖所有回复，报告持续响应不可用，不能推进检查点。
