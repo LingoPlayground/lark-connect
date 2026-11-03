@@ -1,13 +1,13 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "lark-connect",
-  "description": "双运行时飞书插件：通过 lark-cli 配置档案连接聊天，以机器人或用户身份读取上下文、按需回复并持续响应消息。",
+  "description": "双运行时飞书聊天插件：不同聊天可并行连接；群聊及本人私聊用机器人，同事私聊用用户身份。",
   "owner": {"name": "LingoPlayground"},
   "plugins": [
     {
       "name": "lark-connect",
-      "version": "0.2.0",
-      "description": "把当前智能体会话绑定到飞书聊天，以机器人或用户身份持续检查并按需回复消息。",
+      "version": "0.3.0",
+      "description": "把当前智能体会话绑定到飞书聊天，按聊天用途选择身份并持续响应。",
       "author": {"name": "LingoPlayground"},
       "source": "./plugins/lark-connect",
       "category": "productivity",
